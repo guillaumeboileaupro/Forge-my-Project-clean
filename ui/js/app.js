@@ -259,7 +259,7 @@ async function post(path, body) {
     try {
       return await send();
     } catch (retryError) {
-      throw new Error(`connexion interrompue par le navigateur pendant une operation longue (${retryError.message}) ; relancer l'action`);
+      throw new Error(`connexion au serveur local impossible ou interrompue (${retryError.message}) : verifier que server.py tourne, puis relancer l'action`);
     }
   }
 }

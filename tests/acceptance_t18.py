@@ -126,8 +126,13 @@ def api(path, payload):
 
 
 def start_server(clone, env, log):
+    with socket.socket() as probe:  # jamais le serveur Forge personnel de l'utilisateur
+        if probe.connect_ex(("127.0.0.1", 8765)) == 0:
+            raise SystemExit("Port 8765 deja utilise : arreter le serveur Forge en cours avant la recette")
     proc = subprocess.Popen([sys.executable, "server.py"], cwd=clone, env=env, stdout=log, stderr=subprocess.STDOUT)
     for _ in range(100):
+        if proc.poll() is not None:
+            raise SystemExit("Le serveur du clone s'est arrete au demarrage")
         try:
             urllib.request.urlopen(BASE + "/api/catalog", timeout=2).read()
             return proc
@@ -242,7 +247,7 @@ def backup_and_restore(check, dest, original):
     backups = sorted((dest / ".forge-backup").iterdir())
     manifest = json.loads((backups[-1] / "MANIFEST.json").read_text())
     saved = all((backups[-1] / p).read_bytes() == original[p] for p in manifest["replaced"])
-    check.ok("11a sauvegarde des fichiers remplaces", saved and set(manifest["replaced"]) == {"README.md"} | set(manifest["replaced"]),
+    check.ok("11a sauvegarde des fichiers remplaces", saved and manifest["replaced"] == ["README.md"],
              "%s : remplaces %s, crees %d" % (manifest["backup"], manifest["replaced"], len(manifest["created"])))
     # Procedure de restauration documentee dans docs/LOCAL_WRITE.md, executee telle quelle.
     script = ('B=%s\n'
@@ -342,7 +347,9 @@ def main():
         path.mkdir()
     env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), FORGE_WRITE_ROOT=str(write_root))
     env.pop("FORGE_PROFILES_FILE", None)
-    env["GH_CONFIG_DIR"] = os.environ.get("GH_CONFIG_DIR") or str(Path.home() / ".config" / "gh")  # gh reste authentifie
+    # Seule exception au HOME vierge : la configuration gh existante, pour que la recherche GitHub soit authentifiee.
+    # Le jeton n'est ni lu ni journalise par la recette ; gh l'utilise directement.
+    env["GH_CONFIG_DIR"] = os.environ.get("GH_CONFIG_DIR") or str(Path.home() / ".config" / "gh")
     check = Check()
     dest = write_root / "boutique"
     dest.mkdir()
@@ -370,7 +377,8 @@ def main():
         server.wait(10)
         server_log.seek(0)
         log = server_log.read().decode("utf-8", "replace")
-        shutil.copy(work / "server.log", Path(shots) / "server.log")
+        if Path(shots).resolve() != work:
+            shutil.copy(work / "server.log", Path(shots) / "server.log")
         check.ok("L1 journal du serveur sans corps de requete ni secret", "AKIA" not in log and "Partie generee" not in log,
                  "%d lignes de journal" % len(log.splitlines()))
     Path(args.out).write_text(json.dumps({"date": time.strftime("%Y-%m-%d %H:%M"), "results": check.results}, indent=2, ensure_ascii=False))

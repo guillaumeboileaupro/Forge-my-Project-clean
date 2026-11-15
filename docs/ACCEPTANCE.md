@@ -4,7 +4,7 @@ Responsable : Claude Code. Environnement : Linux (noyau 6.8, Ubuntu), Python 3.1
 Exigences et preuves detaillees : docs/TRACEABILITY.md. Statuts : PASS (execute et reussi), NON VERIFIE (non execute ou impossible a executer ici ; jamais compte comme PASS).
 
 ## Parcours complet sur installation propre
-Commande : `python3 tests/acceptance_t18.py --clone <clone> --work <dossier hors du clone> --out rapport.json`, sur un `git clone` neuf de la branche livree (commit 7c0b29f), serveur demarre avec un HOME, une configuration et une racine d'ecriture vierges. Verifications en ligne reelles (npm, OSV, endoflife.date, registre MCP, GitHub). Resultat : **26 etapes, 26 PASS, 0 FAIL, 0 NON VERIFIE**.
+Commande : `python3 tests/acceptance_t18.py --clone <clone> --work <dossier hors du clone> --out rapport.json`, sur un `git clone` neuf de la branche livree (commit 7c0b29f), serveur demarre avec un HOME, une configuration et une racine d'ecriture vierges (seule la configuration `gh` existante est reutilisee, pour une recherche GitHub authentifiee ; le jeton n'est ni lu ni journalise). Le script refuse de demarrer si le port 8765 est deja utilise. Verifications en ligne reelles (npm, OSV, endoflife.date, registre MCP, GitHub). Resultat : **26 etapes, 26 PASS, 0 FAIL, 0 NON VERIFIE**.
 
 | Etape | Resultat |
 | --- | --- |
