@@ -77,7 +77,7 @@ class Destination:
     @contextmanager
     def open(self, create=False, created=None):
         """Descripteur du dossier de destination, ou None s'il n'existe pas (create=False)."""
-        fd = walk(os.open(str(self.root), DIR_FLAGS), self.parts, create, created, self.path)
+        fd = walk(os.open(str(self.root), DIR_FLAGS), self.parts, create, created, str(self.root))
         try:
             yield fd
         finally:
@@ -132,8 +132,8 @@ def walk(fd, parts, create=False, created=None, label=""):
                 created.append(tuple(parts[:index + 1]))
         except OSError as exc:
             os.close(fd)
-            raise DestinationError("Chemin refuse (lien symbolique ou fichier) : %s/%s"
-                                   % (label, "/".join(parts[:index + 1])) if label else "/".join(parts[:index + 1])) from exc
+            shown = "/".join(([label] if label else []) + list(parts[:index + 1]))
+            raise DestinationError("Chemin refuse (lien symbolique ou fichier) : %s" % shown) from exc
         os.close(fd)
         fd = child
     return fd

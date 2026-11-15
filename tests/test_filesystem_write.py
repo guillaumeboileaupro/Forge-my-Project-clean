@@ -61,8 +61,10 @@ class DestinationTests(WriteTestCase):
         target = self.root / "ailleurs"
         target.mkdir()
         (self.root / "projets").symlink_to(target)
-        with self.assertRaises(DestinationError):
+        with self.assertRaises(DestinationError) as raised:
             self.compare()
+        self.assertTrue(str(raised.exception).endswith(str(self.root / "projets")))
+        self.assertNotIn("demo/projets", str(raised.exception))
         with self.assertRaises(DestinationError):
             browse(str(self.root / "projets"))
         self.assertEqual(list(target.iterdir()), [])
