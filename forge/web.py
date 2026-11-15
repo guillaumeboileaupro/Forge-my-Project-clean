@@ -272,7 +272,9 @@ def _journal(report, result):
         "genere": [op["path"] for op in operations if op["action"] in ("created", "replaced", "merged")],
         "ignore": [op["path"] for op in operations if op["action"] in ("kept", "identical")],
         "non_verifie": [x.message for x in result.diagnostics if x.severity is d.Severity.WARNING]
-                       + ["%s %s : %s" % (c["kind"], c["subject"], c["message"]) for c in checks if c["status"] == "NON VERIFIE"],
+                       # Packages et runtimes NON VERIFIES sont deja des avertissements ; seules les API s'ajoutent.
+                       + ["%s %s : %s" % (c["kind"], c["subject"], c["message"]) for c in checks
+                          if c["status"] == "NON VERIFIE" and c["kind"] == "api"],
         "echec": [],  # un echec bloque l'ecriture (409, 422 ou 500 avec restauration)
     }
 

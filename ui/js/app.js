@@ -129,7 +129,8 @@ function filterTechnologies() {
   const term = normalize($('#tech-search').value.trim());
   let shown = 0;
   for (const row of document.querySelectorAll('.tech[data-tech]')) {
-    const match = !term || normalize(`${row.dataset.tech} ${row.textContent}`).includes(term);
+    const label = row.querySelector('label');  // nom et description, sans les options de version
+    const match = !term || normalize(`${row.dataset.tech} ${label ? label.textContent : ''} ${row.querySelector('.help')?.textContent || ''}`).includes(term);
     row.classList.toggle('filtered', !match);
     if (match && !row.hidden) shown += 1;
   }
@@ -157,6 +158,10 @@ async function suggestArchitecture() {
     const response = await post('/api/plan', JSON.stringify({config}));
     const payload = await response.json();
     if (!response.ok || !payload.architecture) throw new Error(payload.error || 'configuration incomplete');
+    if (!payload.architecture.suggested.length) {
+      $('#status').textContent = 'Aucune architecture suggeree par les regles locales pour cette configuration : saisie manuelle.';
+      return;
+    }
     field.value = payload.architecture.suggested.map(line => `- ${line}`).join('\n');
     field.dispatchEvent(new Event('input', {bubbles: true}));
     $('#status').textContent = 'Architecture proposee par les regles locales : la relire et l\'adapter.';
