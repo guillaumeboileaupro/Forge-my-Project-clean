@@ -75,6 +75,21 @@ class PortTests(unittest.TestCase):
         self.addCleanup(other.close)
         self.assertFalse(start.forge_running(other.getsockname()[1]))
 
+    def test_non_http_service_is_not_taken_for_forge(self):
+        other = socket.socket()
+        other.bind(("127.0.0.1", 0))
+        other.listen()
+        self.addCleanup(other.close)
+
+        def greet():
+            conn, _ = other.accept()
+            with conn:
+                conn.sendall(b"SSH-2.0-OpenSSH_9.6\r\n")
+                conn.recv(1024)
+
+        threading.Thread(target=greet, daemon=True).start()
+        self.assertFalse(start.forge_running(other.getsockname()[1]))
+
     def test_invalid_port_is_refused(self):
         with self.assertRaises(SystemExit):
             start.parse_args(["--port", "70000"])

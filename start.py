@@ -10,6 +10,7 @@ Pas d'annotation `X | None`, pas d'import de `forge` au niveau du module.
 """
 import argparse
 import errno
+import http.client
 import os
 import shutil
 import socket
@@ -97,7 +98,8 @@ def forge_running(port):
     try:
         with urllib.request.urlopen("http://{}:{}/".format(HOST, port), timeout=1) as response:
             return b"<title>Forge-my-Project</title>" in response.read(4096)
-    except (OSError, ValueError):
+    except (OSError, ValueError, http.client.HTTPException):
+        # Service non HTTP (ex. SSH) : port occupe par autre chose que Forge.
         return False
 
 
