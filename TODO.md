@@ -26,7 +26,7 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T07 | P3 | Moteur de regles et composition des templates | T06 | 2 j | 0 h 02 | -15 h 58 (base 8 h/j) | DONE | Rendu deterministe et coherent |
 | T08 | P3 | AGENTS.md et documentation complete personnalisee | T07 | 2 j | 0 h 03 | -15 h 57 (base 8 h/j) | DONE | Aucun contenu fictif cache |
 | T09 | P4 | Recuperer et selectionner les skills du depot my-skills | T07 | 1 j | 0 h 03 | -7 h 57 (base 8 h/j) | DONE | Skills pertinents copies sans execution |
-| T10 | P4 | Recherche et validation de skills externes | T09 | 2 j | 0 h 03 | - | IN PROGRESS | Sources verifiees, accord utilisateur |
+| T10 | P4 | Recherche et validation de skills externes | T09 | 2 j | 0 h 14 | -15 h 46 (base 8 h/j) | DONE | Sources verifiees, accord utilisateur |
 | T11 | P4 | Verifier packages, versions, compatibilites, API | T06 | 2 j | 0 h 03 | -15 h 57 (base 8 h/j) | DONE | Packages inconnus rejetes |
 | T12 | P5 | GitHub Actions generees et verifiees | T07,T11 | 2 j | 0 h 16 | -15 h 44 (base 8 h/j) | DONE | Pipelines reels pour stacks supportees |
 | T13 | P5 | Controles securite stricts et rapports | T11,T12 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Scans applicables et blocage fiable |
@@ -106,4 +106,14 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Tests: `tests/test_engine_hooks.py` (garde-fou sur les 3 formats d'evenements, configurations, droits 0755, commits reels: message non conforme, `.env` force, motif de secret, outil absent, pre-push tests OK/KO, branche gitleaks); `tests/smoke_generated.py`: hooks pre-commit et pre-push generes executes avec les outils reels, 6/6 profils PASS.
 - Defaut detecte et corrige: le garde-fou genere ne respectait pas `ruff format`/`ruff check` du projet cible.
 - Limites: le garde-fou exige Python 3 (y compris pour les projets Node); detection par motifs (pas d'analyse complete du shell); les hooks Codex doivent etre approuves via `/hooks`; activation des hooks Git manuelle (`core.hooksPath`), aucun hook n'est installe automatiquement.
+
+### T10 - 15 novembre 2026 (Claude Code)
+- Temps reel: 0 h 03 (moteur et CLI, PR #6) + 11 h 23 -> 11 h 34 (0 h 11) pour l'integration au formulaire et l'integrite des approbations, jusqu'a la PR; CI et fusion notees dans la PR.
+- Formulaire: section « Skills externes » (recherche explicite, fiche nom/description/provenance/commit/empreinte/fichiers copies et ignores, Approuver/Refuser, confirmation pour une source non reconnue, verification en ligne PASS/FAIL/NON VERIFIE). API `POST /api/skills/search` et `POST /api/skills/verify`.
+- Integrite: approbation = depot + commit + empreinte SHA-256 de l'arborescence complete du skill; skill modifie depuis l'approbation ou contenu telecharge different du blob = erreur bloquante `skill-modified`. Approbations sans empreinte refusees a l'import avec un message explicite; un meme nom de skill ne peut etre approuve qu'une fois.
+- Conservation: approbations dans le brouillon, les profils et l'export/import JSON, revalidees par le serveur.
+- Tests: `tests/test_engine_external_skills.py` (empreinte, contenu modifie/ajoute/script modifie, telechargement falsifie, verification), `tests/test_skills_api.py` (5 tests HTTP: recherche, refus, verification, export/import/profil, generation bloquee), recette Firefox `test_external_skills_approval` (recherche, approbation, refus, rechargement, verification PASS puis FAIL, generation bloquee puis debloquee). 181 tests unitaires OK (7 ignores sans FORGE_E2E), recette Firefox 6/6.
+- Verification reelle (GitHub, `gh` et HTTPS anonyme): 8 candidats pour un projet web React; copie de `webapp-testing` avec controle des blobs OK, scripts `examples/*.py` ignores; empreinte falsifiee = FAIL.
+- Defaut corrige: la barre laterale fixe depassait la hauteur de fenetre (bouton Reinitialiser inaccessible); elle defile desormais.
+- Limites: refus conserves uniquement pendant la session; l'empreinte repose sur les SHA-1 de blobs Git fournis par GitHub; la recherche de code GitHub exige la CLI gh authentifiee; la decision de confiance reste humaine.
 

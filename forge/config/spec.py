@@ -21,6 +21,8 @@ FIELDS = {
 }
 REPOSITORY = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+APPROVAL_FIELDS = ("repository", "commit", "path", "name", "digest")
 SKILL_PATH = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 MAX_EXTERNAL_SKILLS = 20
 MAX_TECHNOLOGIES = 30
@@ -41,7 +43,7 @@ class ProjectSpec:
     architecture: str = ""
     versions: dict = field(default_factory=dict)
     options: dict = field(default_factory=lambda: dict(OPTIONS))
-    external_skills: tuple = ()  # approbations explicites : (depot, commit, chemin de base, nom)
+    external_skills: tuple = ()  # approbations explicites : (depot, commit, chemin de base, nom, empreinte)
 
     @property
     def package_name(self):
@@ -101,25 +103,34 @@ def _options(data):
 
 
 def _external_skills(data):
-    """Skills externes approuves par l'utilisateur, epingles sur un commit."""
+    """Skills externes approuves par l'utilisateur, epingles sur un commit et une empreinte."""
     value = data.get("external_skills", [])
     if not isinstance(value, list) or len(value) > MAX_EXTERNAL_SKILLS:
         raise SpecError("external_skills : liste d'au plus %d approbations" % MAX_EXTERNAL_SKILLS)
     approvals = []
     for item in value:
-        if not isinstance(item, dict) or set(item) != {"repository", "commit", "path", "name"}:
-            raise SpecError("external_skills : champs repository, commit, path, name requis")
-        repository, commit, path, name = item["repository"], item["commit"], item["path"], item["name"]
+        if not isinstance(item, dict) or set(item) != set(APPROVAL_FIELDS):
+            raise SpecError("external_skills : champs %s requis (approbation anterieure sans empreinte : "
+                            "rechercher et approuver a nouveau)" % ", ".join(APPROVAL_FIELDS))
         if not all(isinstance(v, str) for v in item.values()):
             raise SpecError("external_skills : valeurs textuelles attendues")
+        repository, commit, path, name, digest = (item[k] for k in APPROVAL_FIELDS)
         if not REPOSITORY.fullmatch(repository) or not COMMIT.fullmatch(commit):
             raise SpecError("external_skills : depot ou commit invalide (SHA complet requis)")
         if not SKILL_PATH.fullmatch(path) or ".." in path.split("/") or not TECH_ID.fullmatch(name):
             raise SpecError("external_skills : chemin ou nom invalide")
-        approvals.append((repository, commit, path, name))
-    if len(set(approvals)) != len(approvals):
-        raise SpecError("external_skills : doublon")
+        if not DIGEST.fullmatch(digest):
+            raise SpecError("external_skills : empreinte invalide pour %s (sha256:<64 hexadecimaux>)" % name)
+        approvals.append((repository, commit, path, name, digest))
+    names = [a[3] for a in approvals]
+    if len(set(names)) != len(names):
+        raise SpecError("external_skills : deux approbations pour le meme nom de skill")
     return tuple(approvals)
+
+
+def parse_approvals(value):
+    """Valide une liste d'approbations seule (import, verification en ligne)."""
+    return _external_skills({"external_skills": value})
 
 
 def parse_spec(data):

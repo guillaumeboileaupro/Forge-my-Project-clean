@@ -16,7 +16,7 @@ result.as_dict()    # rapport JSON (ok, regles, fichiers, diagnostics, verificat
 - `verify=True` : verification en ligne des packages, versions, vulnerabilites et runtimes (T11).
 - `skills=True` : recuperation des skills my-skills et des skills externes approuves (T09/T10).
 - Une erreur bloquante leve `forge.diagnostics.ForgeError` avec ses diagnostics.
-- Recherche de skills externes (candidats, aucune copie) : `forge.skills.service.search_for_plan(plan)`.
+- Recherche de skills externes (candidats, aucune copie) : `forge.skills.service.search_for_plan(plan)` ; controle d'approbations sans copie : `forge.skills.service.verify_approvals(approvals)`.
 
 CLI equivalente (apercu uniquement) :
 
@@ -39,7 +39,7 @@ python -m forge skills-search spec.json
 | security | choix | strict (defaut), hardened |
 | architecture | texte | 4000 caracteres max ; prioritaire sur la suggestion |
 | options | objet | `{"mcp": false}` |
-| external_skills | liste | approbations `{repository, commit (SHA complet), path, name}` |
+| external_skills | liste | approbations `{repository, commit (SHA complet), path, name, digest (sha256:...)}` ; un nom de skill au plus une fois |
 
 Les textes libres sont des donnees : jamais reinterpretes comme modele ni commande.
 
@@ -61,6 +61,8 @@ Ajouter une technologie : une entree JSON dans le bon fichier de categorie, puis
 | Registre ou service injoignable, severite inconnue, API d'un package | NON VERIFIE (avertissement), jamais PASS |
 | Commande de test inconnue, description vide, architecture non definie | avertissement ; rendu `NON DEFINI` |
 | Skill absent, rejete, indisponible ou contenant une commande a risque | avertissement |
+| Skill modifie depuis son approbation, ou contenu telecharge different du blob du commit | erreur (`skill-modified`) |
+| Skills externes approuves sans recuperation des skills demandee | avertissement (`skills-not-fetched`) |
 
 ## Reseau
 
@@ -71,6 +73,8 @@ Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une 
 - Selection : skills recommandes par les regles appliquees.
 - Lecture a un commit epingle ; copie des seuls fichiers texte (.md, .yaml, .yml, .json, .txt) dans `.agents/skills/` (Codex) et `.claude/skills/` (Claude Code). Scripts, executables, liens et binaires ne sont jamais telecharges et sont listes dans `docs/SKILLS.md`.
 - Skills externes : candidats de catalogues reconnus (et recherche GitHub si gh est authentifie, marques « source non reconnue ») ; copie uniquement apres approbation explicite enregistree dans `external_skills`, au commit approuve.
+- Integrite (T10) : l'approbation porte l'empreinte `digest` = SHA-256 des lignes `mode sha-du-blob chemin` de **tous** les fichiers du dossier du skill au commit approuve (scripts compris). A la copie et a la verification, l'empreinte est recalculee : tout ajout, suppression ou modification de fichier refuse le skill (erreur bloquante, nouvel examen et nouvelle approbation necessaires). Chaque fichier telecharge est en outre compare au SHA de son blob Git. Une approbation sans empreinte (format anterieur) est refusee a l'import avec un message explicite.
+- Interface : section « Skills externes » du formulaire (recherche explicite, fiche par candidat avec nom, description, provenance, commit, empreinte, fichiers copies et ignores, lien d'examen sur GitHub, boutons Approuver / Refuser ; confirmation supplementaire pour une source non reconnue). Les approbations suivent les reponses : brouillon, profils, export/import JSON ; « Verifier les approbations » les controle en ligne (PASS / FAIL / NON VERIFIE). Les refus ne sont conserves que pendant la session : seul ce qui est approuve entre dans la configuration.
 
 ## Fichiers de pile et CI generee (T12)
 
@@ -105,4 +109,5 @@ Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une 
 - Pas de lockfile genere (il exige d'executer l'installateur) : la CI generee utilise `npm install` tant que `package-lock.json` n'est pas versionne, puis `npm ci`.
 - Django : pas de squelette `manage.py` genere ; les tests passent par pytest.
 - Le moteur est branche sur le formulaire hybride (`/`, API `/api/*`, voir docs/CONTRACTS.md) ; `generator.py` et `/legacy` restent l'ancien parcours, inchange.
-- L'interface ne propose pas encore la recherche/approbation des skills externes (CLI uniquement), ni l'edition des fichiers avant ecriture (T16) ni l'ecriture locale (T17) : la sortie est un ZIP.
+- L'interface ne propose pas encore l'edition des fichiers avant ecriture (T16) ni l'ecriture locale (T17) : la sortie est un ZIP.
+- L'empreinte des skills s'appuie sur les SHA-1 de blobs Git fournis par GitHub (protection anti-collision de GitHub) ; la confiance repose sur l'examen humain du contenu, que l'outil ne remplace pas.

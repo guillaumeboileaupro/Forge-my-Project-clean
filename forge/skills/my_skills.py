@@ -4,7 +4,7 @@ Les skills retenus sont ceux recommandes par les regles locales (selection
 deterministe). Le depot est lu a un commit precis (provenance), en lecture
 seule ; seuls des fichiers texte sont copies.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from forge.skills import bundle as b
 from forge.skills.github import SHA, check_repository
@@ -16,6 +16,13 @@ class Snapshot:
     repository: str
     commit: str
     entries: dict  # nom du skill -> liste de (chemin relatif, mode, taille)
+    blobs: dict = field(default_factory=dict)  # nom du skill -> {chemin relatif: sha du blob}
+
+    def digest(self, name):
+        """Empreinte de l'arborescence du skill a ce commit (None si incalculable)."""
+        modes = {rel: mode for rel, mode, _ in self.entries.get(name, ())}
+        shas = self.blobs.get(name, {})
+        return b.tree_digest((rel, mode, shas.get(rel)) for rel, mode in modes.items()) if modes else None
 
 
 def fetch_snapshot(client, repository, ref, base_path):
@@ -27,7 +34,7 @@ def fetch_snapshot(client, repository, ref, base_path):
     if tree.get("truncated"):
         raise FetchError("Arborescence tronquee par l'API GitHub")
     prefix = base_path.strip("/") + "/"
-    entries = {}
+    entries, blobs = {}, {}
     for item in tree.get("tree", []):
         path = item.get("path", "")
         if item.get("type") != "blob" or not path.startswith(prefix):
@@ -35,7 +42,8 @@ def fetch_snapshot(client, repository, ref, base_path):
         name, _, rel = path[len(prefix):].partition("/")
         if b.SKILL_NAME.fullmatch(name) and rel:
             entries.setdefault(name, []).append((rel, item.get("mode"), item.get("size")))
-    return Snapshot(repository, commit, entries)
+            blobs.setdefault(name, {})[rel] = item.get("sha")
+    return Snapshot(repository, commit, entries, blobs)
 
 
 def load_skill(name, snapshot, client, base_path, policy, status="copie"):
@@ -49,7 +57,13 @@ def load_skill(name, snapshot, client, base_path, policy, status="copie"):
         if reason:
             record.notes.append("%s ignore : %s" % (rel, reason))
             continue
-        record.files[rel] = client.get_text(snapshot.repository, "%s/%s/%s" % (base_path, name, rel), snapshot.commit)
+        content = client.get_text(snapshot.repository, "%s/%s/%s" % (base_path, name, rel), snapshot.commit)
+        expected = snapshot.blobs.get(name, {}).get(rel)
+        if expected and b.git_blob_sha(content) != expected:
+            record.notes.append("%s : contenu recu different du blob %s du commit : skill rejete" % (rel, expected[:12]))
+            record.status, record.files = "modifie", {}
+            return record
+        record.files[rel] = content
         total += size
     if not b.validate_skill(record):
         record.status, record.files = "rejete", {}

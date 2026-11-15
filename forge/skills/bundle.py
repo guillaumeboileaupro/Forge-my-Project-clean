@@ -4,6 +4,7 @@ Commun aux skills de my-skills (T09) et aux skills externes approuves (T10).
 Seuls des fichiers texte d'extensions autorisees sont copies ; scripts,
 binaires, liens et executables sont ignores et signales. Rien n'est execute.
 """
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ AGENT_SKILL_DIRS = {"codex": ".agents/skills", "claude": ".claude/skills"}
 AGENT_ONLY_PREFIXES = {"claude": ("agents/",)}
 SUSPICIOUS = re.compile(r"(curl|wget)[^\n|]*\|\s*(ba|z)?sh\b|\brm\s+-rf\s+[/~]|base64\s+(-d|--decode)[^\n]*\|", re.I)
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def load_copy_policy(path=None):
@@ -27,12 +29,33 @@ def load_copy_policy(path=None):
     return data
 
 
+def git_blob_sha(content):
+    """SHA-1 d'un blob Git : permet de verifier un contenu telecharge contre l'arborescence."""
+    data = content.encode("utf-8")
+    return hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()
+
+
+def tree_digest(entries):
+    """Empreinte d'un skill : chemin, mode et blob Git de chaque fichier (copie ou non).
+
+    `entries` : iterable de (chemin relatif, mode, sha du blob). Toute modification,
+    ajout ou suppression de fichier dans le dossier du skill change l'empreinte.
+    Retourne None si un blob est inconnu (empreinte impossible).
+    """
+    lines = []
+    for rel, mode, sha in sorted(entries):
+        if not sha or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            return None
+        lines.append("%s %s %s\n" % (mode, sha, rel))
+    return "sha256:" + hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
+
+
 @dataclass
 class SkillRecord:
     name: str
     source: str
     commit: str
-    status: str  # copie | absent | rejete | NON VERIFIE | en attente d'approbation
+    status: str  # copie | absent | rejete | modifie | NON VERIFIE
     files: dict = field(default_factory=dict)  # chemin relatif dans le skill -> contenu
     notes: list = field(default_factory=list)
 
@@ -110,6 +133,8 @@ def provenance_document(bundle, agents):
 
 
 def record_diagnostics(record):
+    if record.status == "modifie":  # integrite de l'approbation rompue : blocage
+        return [d.error("skill-modified", "Skill %s refuse : %s" % (record.name, "; ".join(record.notes)), record.name)]
     if record.status == "absent":
         return [d.warning("skill-missing", "Skill %s introuvable dans %s" % (record.name, record.source), record.name)]
     if record.status == "rejete":

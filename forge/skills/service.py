@@ -26,3 +26,8 @@ def search_for_plan(plan, client=None, config=None):
     """Candidats externes pour l'interface ; l'utilisateur approuve ensuite explicitement."""
     config = config or b.load_copy_policy()
     return external.search(external.keywords_for_plan(plan), client or default_client(), config)
+
+
+def verify_approvals(approvals, client=None):
+    """Controle en ligne des approbations (empreinte inchangee), sans copie."""
+    return external.verify_approvals(approvals, client or default_client())

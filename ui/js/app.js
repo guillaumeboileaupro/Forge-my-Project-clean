@@ -4,7 +4,8 @@
 
 const $ = selector => document.querySelector(selector);
 const NAME = /^[a-z][a-z0-9-]{1,48}[a-z0-9]$/;
-const state = {catalog: null, step: 0, lastConfig: null, ready: false, profiles: {}, saveTimer: null};
+const state = {catalog: null, step: 0, lastConfig: null, ready: false, profiles: {}, saveTimer: null,
+  approvals: [], candidates: [], decisions: {}, approvalStatus: {}};
 const DRAFT_KEY = 'forge-my-project.draft.v1';
 const ANSWERS_FORMAT = 'forge-my-project/answers';
 const MAX_IMPORT_BYTES = 65536;
@@ -120,7 +121,7 @@ function updateConditional() {
 
 // --- Validation et navigation ---------------------------------------------
 function stepErrors() {
-  const errors = [[], [], [], [], []];
+  const errors = [[], [], [], [], [], []];
   if (!NAME.test($('#name').value)) errors[0].push('Nom de projet invalide');
   const selected = new Set(selectedTech());
   for (const category of state.catalog.categories) {
@@ -178,6 +179,7 @@ function collectAnswers() {
     agents: [...document.querySelectorAll('input[name="agent"]:checked')].map(input => input.value),
     security: document.querySelector('input[name="security"]:checked').value,
     options: {mcp: $('#opt-mcp').checked},
+    external_skills: state.approvals.map(approval => Object.assign({}, approval)),
   };
 }
 
@@ -235,7 +237,7 @@ function renderFiles(contents) {
 async function check() {
   const errors = updateBadges();
   const first = errors.findIndex(list => list.length);
-  if (first >= 0 && first < 4) {
+  if (first >= 0 && first < 5) {
     $('#status').textContent = `Section ${first + 1} incomplete : ${errors[first].join(', ')}`;
     return showStep(first);
   }
@@ -311,9 +313,7 @@ function applyAnswers(answers) {
   document.querySelectorAll('input[name="agent"]').forEach(input => { input.checked = answers.agents.includes(input.value); });
   document.querySelectorAll('input[name="security"]').forEach(input => { input.checked = input.value === answers.security; });
   $('#opt-mcp').checked = Boolean(answers.options.mcp);
-  if (answers.external_skills && answers.external_skills.length) {
-    showAlert('Les approbations de skills externes ne sont pas encore gerees par l\'interface : elles ne seront pas conservees.');
-  }
+  setApprovals(answers.external_skills || []);
   $('#download').disabled = true;
   updateBadges();
 }
@@ -327,6 +327,162 @@ async function validateDocument(documentValue) {
   const payload = await response.json();
   if (!response.ok || !payload.ok) throw new Error(payload.error || 'reponses invalides');
   return payload;
+}
+
+// --- Skills externes (T10) ---------------------------------------------------
+// Le navigateur ne decide pas de la confiance : il transmet les approbations,
+// que le serveur revalide (format, commit, empreinte) et recontrole a la copie.
+function skillKey(item) {
+  return [item.repository, item.path, item.name, item.commit].join('|');
+}
+
+function setApprovals(approvals, status = 'non verifiee depuis le chargement') {
+  state.approvals = approvals.map(approval => Object.assign({}, approval));
+  state.approvalStatus = {};
+  for (const approval of state.approvals) state.approvalStatus[skillKey(approval)] = {status, message: ''};
+  renderApprovals();
+}
+
+function approvalsChanged() {
+  renderApprovals();
+  renderCandidates();
+  if (state.lastConfig !== null && state.lastConfig !== requestBody()) $('#download').disabled = true;
+  scheduleSave();
+}
+
+function skillLink(item) {
+  const path = [item.path, item.name].filter(part => part && part !== '.').join('/');
+  const href = `https://github.com/${encodeURI(item.repository)}/tree/${encodeURIComponent(item.commit)}/${encodeURI(path)}`;
+  return element('a', {href, target: '_blank', rel: 'noopener noreferrer'}, 'Examiner le contenu sur GitHub');
+}
+
+function detail(list, term, value) {
+  list.append(element('dt', {}, term), element('dd', {}, value));
+}
+
+function renderCandidates() {
+  const container = $('#skills-candidates');
+  container.replaceChildren();
+  for (const candidate of state.candidates) {
+    const key = skillKey(candidate);
+    const decision = state.approvals.some(a => skillKey(a) === key) ? 'approved' : state.decisions[key];
+    const item = element('li', {class: `skill ${decision || ''}`.trim(), 'data-skill': candidate.name});
+    const title = element('p', {class: 'skill-title'});
+    title.append(element('strong', {}, candidate.name), document.createTextNode(' '),
+      element('span', {class: candidate.recognized ? 'tag ok' : 'tag warning'},
+        candidate.recognized ? 'source reconnue' : 'source non reconnue'));
+    const facts = element('dl');
+    detail(facts, 'Description', candidate.description || '(aucune)');
+    detail(facts, 'Provenance', `${candidate.source} : ${candidate.repository}/${candidate.path}`);
+    detail(facts, 'Commit', candidate.commit);
+    detail(facts, 'Empreinte', candidate.digest);
+    detail(facts, 'Fichiers copies', candidate.copied_files.join(', ') || '(aucun)');
+    detail(facts, 'Fichiers ignores', candidate.ignored_files.join(', ') || '(aucun)');
+    if (candidate.notes.length) detail(facts, 'A relire', candidate.notes.join(' ; '));
+    const actions = element('div', {class: 'row'});
+    const approve = element('button', {type: 'button', 'data-action': 'approve', 'aria-label': `Approuver ${candidate.name}`}, 'Approuver');
+    const refuse = element('button', {type: 'button', 'data-action': 'refuse', 'aria-label': `Refuser ${candidate.name}`}, 'Refuser');
+    approve.disabled = decision === 'approved';
+    refuse.disabled = decision === 'refused';
+    approve.addEventListener('click', () => approveCandidate(candidate));
+    refuse.addEventListener('click', () => refuseCandidate(candidate));
+    actions.append(approve, refuse);
+    const label = decision === 'approved' ? 'Approuve' : decision === 'refused' ? 'Refuse' : 'En attente de decision';
+    item.append(title, facts, skillLink(candidate), actions, element('p', {class: 'help decision'}, label));
+    container.append(item);
+  }
+}
+
+function renderApprovals() {
+  const list = $('#skills-approved');
+  list.replaceChildren();
+  for (const approval of state.approvals) {
+    const key = skillKey(approval);
+    const check = state.approvalStatus[key] || {status: 'non verifiee', message: ''};
+    const css = check.status === 'PASS' ? 'ok' : check.status === 'FAIL' ? 'error' : 'warning';
+    const item = element('li', {class: 'skill', 'data-approved': approval.name});
+    const title = element('p', {class: 'skill-title'});
+    title.append(element('strong', {}, approval.name), document.createTextNode(' '),
+      element('span', {class: `tag ${css}`, 'data-status': check.status}, check.status));
+    const facts = element('dl');
+    detail(facts, 'Depot', `${approval.repository}/${approval.path}`);
+    detail(facts, 'Commit', approval.commit);
+    detail(facts, 'Empreinte', approval.digest);
+    if (check.message) detail(facts, 'Controle', check.message);
+    const remove = element('button', {type: 'button', 'aria-label': `Retirer l'approbation de ${approval.name}`}, 'Retirer l\'approbation');
+    remove.addEventListener('click', () => refuseCandidate(approval));
+    item.append(title, facts, skillLink(approval), remove);
+    list.append(item);
+  }
+  $('#skills-empty').hidden = state.approvals.length > 0;
+  $('#skills-verify').disabled = state.approvals.length === 0;
+}
+
+function approveCandidate(candidate) {
+  showAlert('');
+  const key = skillKey(candidate);
+  const clash = state.approvals.find(a => a.name === candidate.name && skillKey(a) !== key);
+  if (clash) {
+    return showAlert(`Un skill nomme « ${candidate.name} » est deja approuve (${clash.repository}) : retirer d'abord cette approbation.`);
+  }
+  if (!candidate.recognized && !window.confirm(`Source non reconnue (${candidate.repository}). Avez-vous examine tout le contenu de « ${candidate.name} » ?`)) {
+    return;
+  }
+  state.approvals.push(Object.assign({}, candidate.approval));
+  state.approvalStatus[key] = {status: 'approuve', message: 'Approuve apres examen dans cette session'};
+  state.decisions[key] = 'approved';
+  $('#status').textContent = `Skill « ${candidate.name} » approuve au commit ${candidate.commit.slice(0, 12)}.`;
+  approvalsChanged();
+}
+
+function refuseCandidate(item) {
+  const key = skillKey(item);
+  state.approvals = state.approvals.filter(a => skillKey(a) !== key);
+  delete state.approvalStatus[key];
+  state.decisions[key] = 'refused';
+  $('#status').textContent = `Skill « ${item.name} » refuse : il ne sera pas copie.`;
+  approvalsChanged();
+}
+
+async function searchSkills() {
+  const errors = updateBadges();
+  const first = errors.findIndex(list => list.length);
+  if (first >= 0 && first < 4) {
+    $('#status').textContent = `Section ${first + 1} incomplete : la recherche depend de la configuration.`;
+    return;
+  }
+  $('#status').textContent = 'Recherche de skills en cours (GitHub)...';
+  $('#skills-search').disabled = true;
+  try {
+    const config = Object.assign(buildConfig(), {external_skills: []});
+    const response = await post('/api/skills/search', JSON.stringify({config}));
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'recherche refusee');
+    state.candidates = payload.candidates;
+    const notes = $('#skills-notes');
+    notes.replaceChildren(...payload.notes.map(note => element('li', {}, note)));
+    renderCandidates();
+    $('#status').textContent = `${payload.candidates.length} skill(s) candidat(s) : examiner puis approuver ou refuser.`;
+  } catch (error) {
+    $('#status').textContent = `Recherche impossible : ${error.message}`;
+  } finally {
+    $('#skills-search').disabled = false;
+  }
+}
+
+async function verifySkills() {
+  $('#status').textContent = 'Verification des approbations (GitHub)...';
+  try {
+    const response = await post('/api/skills/verify', JSON.stringify({approvals: state.approvals}));
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'verification refusee');
+    for (const check of payload.checks) state.approvalStatus[skillKey(check)] = {status: check.status, message: check.message};
+    renderApprovals();
+    $('#status').textContent = payload.ok ? 'Approbations verifiees : contenus inchanges.'
+      : 'Au moins une approbation n\'est pas verifiee ou le skill a change : retirer ou examiner a nouveau.';
+  } catch (error) {
+    $('#status').textContent = `Verification impossible : ${error.message}`;
+  }
 }
 
 // --- Sauvegarde automatique --------------------------------------------------
@@ -375,6 +531,10 @@ function resetForm() {
   $('#download').disabled = true;
   $('#preview').hidden = true;
   $('#report').replaceChildren();
+  state.candidates = [];
+  state.decisions = {};
+  setApprovals([]);
+  renderCandidates();
   state.ready = true;
   $('#autosave-status').textContent = 'Questionnaire reinitialise.';
   showStep(0);
@@ -532,6 +692,9 @@ async function init() {
   $('#profile-create').addEventListener('click', () => saveProfile('POST'));
   $('#profile-update').addEventListener('click', () => saveProfile('PUT'));
   $('#profile-delete').addEventListener('click', deleteProfile);
+  $('#skills-search').addEventListener('click', searchSkills);
+  $('#skills-verify').addEventListener('click', verifySkills);
+  renderApprovals();
   updateConditional();
   updateBadges();
   await Promise.all([restoreDraft(), refreshProfiles()]);

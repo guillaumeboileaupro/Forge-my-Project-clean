@@ -3,7 +3,9 @@
 Recherche : catalogues reconnus (catalogs/skills/sources.json) et, si la CLI
 gh est authentifiee, recherche de code GitHub. Les resultats sont des
 CANDIDATS : rien n'est copie sans approbation explicite, enregistree dans la
-configuration (`external_skills`) avec le commit exact examine.
+configuration (`external_skills`) avec le commit exact examine et l'empreinte
+de l'arborescence du skill. Un skill dont l'empreinte a change depuis son
+approbation est refuse (erreur bloquante) ; aucun script n'est copie ni execute.
 """
 import re
 from dataclasses import dataclass, field
@@ -26,13 +28,15 @@ class Candidate:
     recognized: bool
     source: str
     score: int
+    digest: str = ""
     copied_files: list = field(default_factory=list)
     ignored_files: list = field(default_factory=list)
     notes: list = field(default_factory=list)
 
     def approval(self):
         """Valeur a ajouter a `external_skills` si l'utilisateur approuve ce candidat."""
-        return {"repository": self.repository, "commit": self.commit, "path": self.path, "name": self.name}
+        return {"repository": self.repository, "commit": self.commit, "path": self.path, "name": self.name,
+                "digest": self.digest}
 
     def as_dict(self):
         return dict(self.__dict__, approval=self.approval())
@@ -68,8 +72,11 @@ def _candidate(snapshot, base_path, name, client, policy, keywords, recognized, 
     notes = [] if recognized else ["Source non reconnue : examen manuel complet requis avant approbation"]
     if meta.get("name") != name:
         notes.append("En-tete SKILL.md invalide : sera rejete a la copie")
+    digest = snapshot.digest(name)
+    if not digest:
+        return None  # sans empreinte, l'approbation ne pourrait pas etre controlee
     return Candidate(snapshot.repository, snapshot.commit, base_path, name, description, recognized, source, score,
-                     sorted(copied), sorted(ignored), notes)
+                     digest, sorted(copied), sorted(ignored), notes)
 
 
 def _search_catalog(catalog, client, policy, keywords, out):
@@ -134,20 +141,39 @@ def search(keywords, client, config):
     return out
 
 
+MODIFIED = "modifie depuis son approbation (empreinte differente) : examiner puis approuver a nouveau"
+
+
+def _approved_snapshot(client, repository, commit, path):
+    snapshot = fetch_snapshot(client, repository, commit, path)
+    if snapshot.commit != commit:
+        raise FetchError("Commit different de celui approuve")
+    return snapshot
+
+
+def check_approval(snapshot, name, digest):
+    """Retourne None si le skill est intact, sinon la raison du refus."""
+    if name not in snapshot.entries:
+        return "absent du commit approuve"
+    if snapshot.digest(name) != digest:
+        return MODIFIED
+    return None
+
+
 def collect_approved(approvals, agents, client, config, result):
-    """Copie les skills approuves, au commit exact approuve, avec les memes controles."""
+    """Copie les skills approuves, au commit et a l'empreinte approuves, avec les memes controles."""
     policy = config["copy"]
     recognized = {c["repository"] for c in config["external_catalogs"]}
-    for repository, commit, path, name in approvals:
+    for repository, commit, path, name, digest in approvals:
         source = "%s (approuve%s)" % (repository, "" if repository in recognized else ", source non reconnue")
         try:
-            snapshot = fetch_snapshot(client, repository, commit, path)
-            if snapshot.commit != commit:
-                raise FetchError("Commit different de celui approuve")
-            if name not in snapshot.entries:
-                result.records.append(b.SkillRecord(name, source, commit, "absent"))
-                continue
-            record = load_skill(name, snapshot, client, path, policy)
+            snapshot = _approved_snapshot(client, repository, commit, path)
+            problem = check_approval(snapshot, name, digest)
+            if problem:
+                record = b.SkillRecord(name, source, commit, "absent" if name not in snapshot.entries else "modifie",
+                                       notes=[problem])
+            else:
+                record = load_skill(name, snapshot, client, path, policy)
         except FetchError as exc:
             record = b.SkillRecord(name, source, commit, "NON VERIFIE", notes=[str(exc)])
         record.source = source
@@ -155,3 +181,21 @@ def collect_approved(approvals, agents, client, config, result):
         if record.status == "copie":
             b.place(record, agents, result)
     return result
+
+
+def verify_approvals(approvals, client):
+    """Controle en ligne des approbations (import, reprise) sans rien copier.
+
+    Statuts : PASS (intact), FAIL (absent ou modifie), NON VERIFIE (inaccessible).
+    """
+    checks = []
+    for repository, commit, path, name, digest in approvals:
+        item = {"repository": repository, "commit": commit, "path": path, "name": name, "digest": digest}
+        try:
+            problem = check_approval(_approved_snapshot(client, repository, commit, path), name, digest)
+        except FetchError as exc:
+            checks.append(dict(item, status="NON VERIFIE", message=str(exc)))
+            continue
+        checks.append(dict(item, status="FAIL" if problem else "PASS", message=problem or "Empreinte identique"))
+    return checks
+
