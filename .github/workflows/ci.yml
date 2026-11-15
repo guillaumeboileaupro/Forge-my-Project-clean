@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Syntax
-        run: python3 -m compileall -q generator.py server.py forge tests
+        run: python3 -m compileall -q generator.py server.py start.py forge tests
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Browser E2E (Firefox headless)
