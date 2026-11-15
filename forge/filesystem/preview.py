@@ -1,5 +1,6 @@
 """Validation des modifications de l'apercu, sans acces au systeme de fichiers."""
 
+from forge.filesystem.content import check_contents
 from forge.generator.paths import safe_relative_path
 
 MAX_FILE_BYTES = 256 * 1024
@@ -11,7 +12,7 @@ class PreviewError(ValueError):
 
 
 def validate_preview(files, generated):
-    """Valide une copie complete des textes affiches dans l'editeur."""
+    """Valide une copie complete des textes affiches dans l'editeur (chemins, tailles, contenu)."""
     if not isinstance(files, dict):
         raise PreviewError("Les fichiers modifies doivent former un objet chemin/contenu")
     expected = set(generated)
@@ -43,4 +44,5 @@ def validate_preview(files, generated):
         if total > MAX_TOTAL_BYTES:
             raise PreviewError("Ensemble de fichiers trop volumineux")
         validated[path] = content
+    check_contents(generated, validated)
     return validated

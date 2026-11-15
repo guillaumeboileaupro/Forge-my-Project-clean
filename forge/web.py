@@ -16,7 +16,10 @@ from forge.config.spec import AGENTS, OPTIONS, PROJECT_TYPES, SECURITY_LEVELS, S
 from forge.diagnostics import ForgeError
 from forge.generator.archive import build_zip
 from forge.generator.context import AGENT_INFO, PROJECT_TYPE_LABELS
+from forge.filesystem import workflow
+from forge.filesystem.destination import browse
 from forge.filesystem.preview import validate_preview
+from forge.filesystem.writer import StaleError, WriteFailure
 from forge.mcp.catalog import load_mcp_catalog
 from forge.pipeline import run
 from forge.planner.plan import build_plan
@@ -63,23 +66,34 @@ def _mcp_payload(server):
     }
 
 
-def _parse_request(raw, allow_files=False):
+def _parse_request(raw, extra=()):
     try:
         body = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SpecError("JSON invalide") from exc
-    allowed = REQUEST_FIELDS | ({"files"} if allow_files else set())
+    allowed = REQUEST_FIELDS | set(extra)
     if not isinstance(body, dict) or set(body) - allowed or "config" not in body:
-        raise SpecError("Requete invalide : champs config, verify, skills" + (", files" if allow_files else ""))
+        raise SpecError("Requete invalide : champs " + ", ".join(["config", "verify", "skills", *extra]))
     verify, skills = body.get("verify", False), body.get("skills", False)
     if not isinstance(verify, bool) or not isinstance(skills, bool):
         raise SpecError("verify et skills doivent etre booleens")
-    return body["config"], verify, skills, body.get("files")
+    return body
 
 
-def _execute(raw, allow_files=False):
-    config, verify, skills, files = _parse_request(raw, allow_files=allow_files)
-    return run(config, verify=verify, skills=skills), files
+def _execute(raw, extra=()):
+    """Regenere le plan (controles repetes) ; retourne le resultat et la requete decodee."""
+    body = _parse_request(raw, extra)
+    return run(body["config"], verify=body.get("verify", False), skills=body.get("skills", False)), body
+
+
+def _validated_files(raw, extra):
+    """Plan sans erreur bloquante + editions revalidees (chemins, tailles, contenu)."""
+    result, body = _execute(raw, ("files", *extra))
+    if d.has_errors(result.diagnostics):
+        raise ForgeError("Erreurs bloquantes", [x for x in result.diagnostics if x.severity is d.Severity.ERROR])
+    if "files" not in body:
+        raise ValueError("Le champ files est requis")
+    return result, body, validate_preview(body["files"], result.files)
 
 
 def _failure(exc):
@@ -102,10 +116,10 @@ def plan_payload(raw):
 def archive_payload(raw):
     """Repete tous les controles avant de produire l'archive ; refuse toute erreur."""
     try:
-        result, edited = _execute(raw, allow_files=True)
+        result, body = _execute(raw, ("files",))
         if d.has_errors(result.diagnostics):
             raise ForgeError("Erreurs bloquantes", [x for x in result.diagnostics if x.severity is d.Severity.ERROR])
-        files = result.files if edited is None else validate_preview(edited, result.files)
+        files = result.files if body.get("files") is None else validate_preview(body["files"], result.files)
         name = result.plan.spec.name
         content = build_zip(name, files)
     except (ForgeError, ValueError) as exc:
@@ -116,10 +130,10 @@ def archive_payload(raw):
 def preview_validate_payload(raw):
     """Regenere le plan puis valide l'ensemble exact des textes edites."""
     try:
-        result, edited = _execute(raw, allow_files=True)
-        if edited is None:
+        result, body = _execute(raw, ("files",))
+        if body.get("files") is None:
             raise ValueError("Le champ files est requis pour valider l'apercu")
-        files = validate_preview(edited, result.files)
+        files = validate_preview(body["files"], result.files)
     except (ForgeError, ValueError) as exc:
         return _failure(exc)
     changed = sorted(path for path, content in files.items() if content != result.files[path])
@@ -213,3 +227,57 @@ def skills_verify_payload(raw):
     except ValueError as exc:
         return _failure(exc)
     return _json(200, {"ok": all(c["status"] == "PASS" for c in checks), "checks": checks})
+
+
+# --- Destination locale, comparaison et ecriture confirmee (T17) -------------
+def destination_browse_payload(raw):
+    """Sous-dossiers d'un dossier de la racine autorisee (lecture seule)."""
+    try:
+        try:
+            body = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("JSON invalide") from exc
+        if not isinstance(body, dict) or set(body) - {"path"}:
+            raise ValueError("Requete invalide : champ path optionnel uniquement")
+        path = body.get("path")
+        if path is not None and not isinstance(path, str):
+            raise ValueError("path doit etre une chaine")
+        listing = browse(path)
+    except (ValueError, OSError) as exc:
+        return _failure(exc if isinstance(exc, ValueError) else ValueError("Dossier inaccessible : %s" % exc.strerror))
+    return _json(200, dict(listing, ok=True))
+
+
+def write_compare_payload(raw):
+    """Regenere, revalide les editions puis compare a la destination ; aucune ecriture."""
+    try:
+        result, body, files = _validated_files(raw, ("destination",))
+        comparison = workflow.compare_destination(body.get("destination"), files)
+    except (ForgeError, ValueError) as exc:
+        return _failure(exc)
+    except OSError as exc:
+        return _failure(ValueError("Destination inaccessible : %s" % exc.strerror))
+    return _json(200, dict(comparison, ok=True, diagnostics=[x.as_dict() for x in result.diagnostics]))
+
+
+def write_apply_payload(raw):
+    """Repete generation, controles, validation et comparaison, puis ecrit apres confirmation."""
+    try:
+        result, body, files = _validated_files(raw, ("destination", "token", "decisions", "confirm"))
+        report = workflow.write_destination(body.get("destination"), files, result.files, body.get("token"),
+                                            body.get("decisions", {}), body.get("confirm"))
+    except (workflow.StaleValidation, StaleError) as exc:
+        return _json(409, {"ok": False, "error": str(exc), "stale": True,
+                           "report": getattr(exc, "report", None), "diagnostics": []})
+    except WriteFailure as exc:
+        return _json(500, {"ok": False, "error": str(exc), "report": exc.report, "diagnostics": []})
+    except (ForgeError, ValueError) as exc:
+        return _failure(exc)
+    except OSError as exc:
+        return _failure(ValueError("Destination inaccessible : %s" % exc.strerror))
+    report["journal"] = {
+        "non_verifie": [x.message for x in result.diagnostics if x.severity is d.Severity.WARNING],
+        "echec": [],
+    }
+    return _json(200, {"ok": True, "report": report, "diagnostics": [x.as_dict() for x in result.diagnostics]})
+

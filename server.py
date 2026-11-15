@@ -19,6 +19,7 @@ LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$"
 LEGACY_LIMIT = 16384
 API_LIMIT = 65536
 FILES_API_LIMIT = 2500000
+WRITE_API_LIMIT = 6000000  # fichiers edites (2 Mio) + contenus fusionnes, echappement JSON compris
 API_POST = {
     "/api/plan": (web.plan_payload, API_LIMIT),
     "/api/archive": (web.archive_payload, FILES_API_LIMIT),
@@ -27,6 +28,9 @@ API_POST = {
     "/api/profiles": (web.profile_create_payload, API_LIMIT),
     "/api/skills/search": (web.skills_search_payload, API_LIMIT),
     "/api/skills/verify": (web.skills_verify_payload, API_LIMIT),
+    "/api/destination/browse": (web.destination_browse_payload, API_LIMIT),
+    "/api/write/compare": (web.write_compare_payload, FILES_API_LIMIT),
+    "/api/write/apply": (web.write_apply_payload, WRITE_API_LIMIT),
 }
 PROFILE_PATH = re.compile(r"^/api/profiles/([a-z0-9][a-z0-9-]{0,47})$")
 
