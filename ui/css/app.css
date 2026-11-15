@@ -19,7 +19,7 @@ body.forge{max-width:none;margin:0;padding:0}
 .forge nav button[aria-current=step]{background:#e8eefb;border-color:#1a4bb0}
 .forge .badge{background:#b3261e;color:white;border-radius:10px;padding:0 8px;font-size:.8rem}
 .forge main{min-width:0}
-.forge fieldset{border:1px solid #d6dde8;border-radius:8px;margin:14px 0;padding:10px 14px}
+.forge fieldset{border:1px solid #d6dde8;border-radius:8px;margin:14px 0;padding:10px 14px;min-width:0}
 .forge legend{font-weight:700;padding:0 4px}
 .forge label.check{display:inline-flex;gap:8px;align-items:center;font-weight:600;margin:8px 16px 4px 0}
 .forge .tech{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;padding:4px 0;border-bottom:1px solid #eef1f6}
@@ -74,3 +74,14 @@ body.forge{max-width:none;margin:0;padding:0}
 .forge .skill dd{margin:0;overflow-wrap:anywhere}
 .forge .tag{font-size:.78rem;font-weight:700;border:1px solid currentColor;border-radius:10px;padding:0 8px}
 @media (max-width:760px){.forge .skill dl{grid-template-columns:1fr}}
+.forge .dir-list,.forge .compare-list{list-style:none;padding:0;margin:8px 0;display:flex;flex-wrap:wrap;gap:6px}
+.forge .dir-list button{font-size:.85rem;padding:5px 10px}
+.forge .compare-list{display:block;max-height:320px;overflow:auto;border:1px solid #d6dde8;border-radius:8px;padding:4px}
+.forge .compare-list li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 6px;border-bottom:1px solid #eef1f6}
+.forge .compare-list button{font-size:.85rem;padding:4px 8px;text-align:left;overflow-wrap:anywhere;flex:1 1 auto}
+.forge .compare-list span{white-space:nowrap}
+.forge .diff{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px;max-height:360px;overflow:auto;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+.forge #merge-content{width:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+.forge .conflict{border:1px solid #8a4b00;border-radius:8px;padding:10px 14px;margin:10px 0}
+.forge #write-report ul{padding-left:18px}
+.forge code{overflow-wrap:anywhere}

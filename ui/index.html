@@ -142,6 +142,42 @@
           </section>
         </div>
         <button type="button" id="download" class="primary" disabled>Telecharger l'archive ZIP</button>
+        <fieldset id="local-write" disabled>
+          <legend>Ecrire dans un dossier local (optionnel)</legend>
+          <p class="help">Disponible apres validation des fichiers. Rien n'est ecrit avant la comparaison et votre confirmation ; chaque fichier remplace est d'abord sauvegarde dans <code>.forge-backup/</code> du dossier choisi. Racine autorisee : <code id="dest-root">-</code>.</p>
+          <label for="destination">Dossier de destination (nouveau ou existant, chemin absolu)</label>
+          <input type="text" id="destination" spellcheck="false" autocomplete="off" aria-describedby="dest-help">
+          <p id="dest-help" class="help">Les liens symboliques, les remontees (..) et les dossiers hors de la racine autorisee sont refuses.</p>
+          <div class="row">
+            <button type="button" id="browse">Parcourir ce dossier</button>
+            <button type="button" id="browse-up">Dossier parent</button>
+            <button type="button" id="compare">Comparer avec la destination</button>
+          </div>
+          <ul id="dest-dirs" class="dir-list" aria-label="Sous-dossiers du dossier parcouru"></ul>
+          <div id="comparison" hidden>
+            <h3 id="h-compare">Comparaison</h3>
+            <p id="compare-summary" aria-live="polite"></p>
+            <ul id="compare-list" class="compare-list" aria-labelledby="h-compare"></ul>
+            <section id="conflict" class="conflict" aria-labelledby="conflict-title" hidden>
+              <h3 id="conflict-title"></h3>
+              <p id="conflict-reason" class="help"></p>
+              <pre id="diff" class="diff" tabindex="0" aria-label="Differences entre le fichier existant et le fichier prepare"></pre>
+              <fieldset class="resolution">
+                <legend>Decision pour ce fichier</legend>
+                <label class="check"><input type="radio" name="resolution" value="keep"> Conserver l'existant</label>
+                <label class="check"><input type="radio" name="resolution" value="replace"> Remplacer (sauvegarde de l'existant)</label>
+                <label class="check"><input type="radio" name="resolution" value="merge"> Fusionner manuellement</label>
+              </fieldset>
+              <div id="merge" hidden>
+                <label for="merge-content">Contenu fusionne (part du fichier existant ; reprendre les ajouts voulus depuis le diff)</label>
+                <textarea id="merge-content" rows="14" spellcheck="false"></textarea>
+              </div>
+            </section>
+            <label class="check"><input type="checkbox" id="write-confirm"> J'ai relu la comparaison et je confirme l'ecriture dans ce dossier</label>
+            <button type="button" id="write" class="primary" disabled>Ecrire les fichiers</button>
+          </div>
+          <div id="write-report" aria-live="polite"></div>
+        </fieldset>
       </section>
 
       <div class="actions">

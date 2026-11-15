@@ -38,7 +38,9 @@ class FirefoxFormTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.profiles_dir = tempfile.mkdtemp(prefix="forge-e2e-profiles-")
-        cls.env = mock.patch.dict(os.environ, {"FORGE_PROFILES_FILE": os.path.join(cls.profiles_dir, "profiles.json")})
+        cls.write_root = os.path.realpath(tempfile.mkdtemp(prefix="forge-e2e-write-"))
+        cls.env = mock.patch.dict(os.environ, {"FORGE_PROFILES_FILE": os.path.join(cls.profiles_dir, "profiles.json"),
+                                               "FORGE_WRITE_ROOT": cls.write_root})
         cls.env.start()
         # GitHub remplace par un faux client : aucun acces reseau pendant la recette.
         cls.skill_client = FakeGh()
@@ -81,6 +83,7 @@ class FirefoxFormTests(unittest.TestCase):
                 patch.stop()
             shutil.rmtree(cls.tmp, ignore_errors=True)
             shutil.rmtree(cls.profiles_dir, ignore_errors=True)
+            shutil.rmtree(cls.write_root, ignore_errors=True)
 
     def setUp(self):
         """Chaque parcours part d'un navigateur sans brouillon."""
@@ -418,6 +421,76 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('#skills-approved button')
         self.assertTrue(self.js("return document.querySelector('#download').disabled"))
 
+
+    def test_local_write_journey(self):
+        """Destination existante : conflits, fusion manuelle, confirmation, sauvegarde, puis validation perimee."""
+        from pathlib import Path
+        dest = Path(self.write_root) / "clients" / "write-demo"
+        (dest / "docs").mkdir(parents=True)
+        (dest / "README.md").write_text("README existant\n")
+        (dest / "notes.txt").write_text("hors generation\n")
+        self.type_text("#name", "write-demo")
+        self.click('[data-goto="1"]')
+        for css in ("#tech-python", "#tech-pytest"):
+            self.click(css)
+        self.click('[data-goto="2"]')
+        self.click('input[name="agent"][value="claude"]')
+        self.click('[data-goto="5"]')
+        self.assertTrue(self.js("return document.querySelector('#local-write').disabled"))
+        self.click("#check")
+        self.wait("return !document.querySelector('#preview').hidden")
+        self.click('[data-path="AGENTS.md"]')
+        self.js("const e=document.querySelector('#content'); e.value += '\\nEdition locale.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.click("#validate-files")
+        self.wait("return !document.querySelector('#local-write').disabled")
+        self.assertEqual(self.text("#dest-root"), self.write_root)
+        # Navigation dans la racine autorisee jusqu'au dossier existant.
+        self.click("#browse")
+        self.wait("return document.querySelector('[data-dir=\"clients\"]') !== null")
+        self.click('[data-dir="clients"]')
+        self.wait("return document.querySelector('[data-dir=\"write-demo\"]') !== null")
+        self.click('[data-dir="write-demo"]')
+        self.wait("return document.querySelector('#destination').value.endsWith('/write-demo')")
+        self.click("#compare")
+        self.wait("return !document.querySelector('#comparison').hidden")
+        self.assertIn("1 conflit(s)", self.text("#compare-summary"))
+        self.assertEqual(self.js("return document.querySelector('[data-entry=\"README.md\"]').dataset.status"), "conflict")
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ["README.md", "docs", "notes.txt"])  # rien d'ecrit
+        self.click("#write-confirm")
+        self.assertTrue(self.js("return document.querySelector('#write').disabled"))  # conflit sans decision
+        self.click('[data-entry="README.md"] button')
+        self.assertIn("-README existant", self.text("#diff"))
+        self.click('input[name="resolution"][value="merge"]')
+        self.js("const e=document.querySelector('#merge-content'); e.value = 'README existant\\nFusion relue.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.wait("return !document.querySelector('#write').disabled")
+        self.js("window.confirm = () => true")
+        self.screenshot("write-compare")
+        self.click("#write")
+        self.wait("return document.querySelector('#write-report').textContent.includes('Ecriture terminee')")
+        self.screenshot("write-report")
+        self.assertEqual((dest / "README.md").read_text(), "README existant\nFusion relue.\n")
+        self.assertTrue((dest / "AGENTS.md").read_text().endswith("Edition locale.\n"))
+        self.assertEqual((dest / "notes.txt").read_text(), "hors generation\n")
+        backups = list((dest / ".forge-backup").iterdir())
+        self.assertEqual(len(backups), 1)
+        self.assertEqual((backups[0] / "README.md").read_text(), "README existant\n")
+        self.assertIn("fusionne : README.md", self.text("#write-report"))
+        # Nouvelle comparaison puis modification concurrente : ecriture refusee (409), rien d'ecrase.
+        self.click("#compare")
+        self.wait("return !document.querySelector('#comparison').hidden")
+        self.assertIn("0 nouveau(x)", self.text("#compare-summary"))
+        self.assertIn("1 conflit(s)", self.text("#compare-summary"))  # README fusionne != fichier prepare
+        self.click('[data-entry="README.md"] button')
+        self.click('input[name="resolution"][value="keep"]')
+        (dest / "CLAUDE.md").write_text("modifie par un autre outil\n")
+        self.click("#write-confirm")
+        self.click("#write")
+        self.wait("return document.querySelector('#status').textContent.includes('Validation perimee')")
+        self.assertEqual((dest / "CLAUDE.md").read_text(), "modifie par un autre outil\n")
+        # Une modification de la configuration desactive l'ecriture.
+        self.click('[data-goto="0"]')
+        self.cmd("POST", "/element/%s/value" % self.find("#description"), {"text": "x"})
+        self.assertTrue(self.js("return document.querySelector('#local-write').disabled"))
 
 if __name__ == "__main__":
     unittest.main()

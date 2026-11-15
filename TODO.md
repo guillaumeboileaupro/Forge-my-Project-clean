@@ -33,7 +33,7 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T14 | P5 | Hooks Git et agents suivant leurs capacites | T07 | 1 j | 0 h 11 | -7 h 49 (base 8 h/j) | DONE | Hooks activables et executes |
 | T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | 0 h 12 | -7 h 48 (base 8 h/j) | DONE | Aucun MCP fictif ni secret |
 | T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | 0 h 15 | -15 h 45 (base 8 h/j) | DONE | Modifications visibles avant ecriture |
-| T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | - | - | TODO | Conflits et rollback testes |
+| T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Conflits et rollback testes |
 | T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | - | - | TODO | Critères de finalisation valides |
 | **Total** | | | | **30 j** | **-** | **-** | | |
 
@@ -144,4 +144,15 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Securite: Bandit 1.9.4 aucune alerte au seuil CI (3 LOW preexistantes, identiques a `main`); Gitleaks 8.30.1 sur l'historique de la branche et sur forge/ui/tests: aucune fuite; seules ecritures du code applicatif: magasin de profils (`forge/config/profiles.py`), aucune dans un projet cible.
 - CI: premier run push en echec sur `test_engine_hooks` (T14, course `maintenance.lock` entre la maintenance Git detachee et la suppression du depot temporaire, sans lien avec T16); correction: `gc.auto=0` et `maintenance.auto=false` dans le depot de test.
 - Limites: le contenu edite n'est pas rescanne pour les secrets avant l'archive (la CI generee lance Gitleaks); une edition de `.mcp.json` ou d'un skill n'est pas revalidee semantiquement (seuls chemins, encodage et tailles); les editions sont perdues si la configuration change.
+
+### T17 - 15 novembre 2026 (Claude Code, a la place de Codex indisponible)
+- Temps reel: 13 h 33 -> 13 h 45 (0 h 12), de la synchronisation de `main` a la recette Firefox complete verte; CI et fusion notees dans la PR.
+- Destination: saisie ou parcours des sous-dossiers de la racine autorisee (`FORGE_WRITE_ROOT`, sinon dossier personnel), dossier nouveau ou existant, droits verifies; chemins relatifs, `..`, racine, dossier de Forge-my-Project et liens symboliques refuses (parcours par descripteurs O_NOFOLLOW).
+- Comparaison: nouveau, identique, conflit (diff unifie), bloque (lien, fichier special); decision obligatoire pour chaque conflit (conserver, remplacer, fusion manuelle); aucune ecriture pendant la comparaison.
+- Ecriture: confirmation explicite, jeton HMAC de validation (etat des cibles, contenus, destination), reverification de chaque cible, sauvegarde `.forge-backup/<horodatage>/` avec MANIFEST.json, ecriture atomique (temporaire, fsync, rename), rollback automatique, rapport final (operations, sauvegarde, avertissements).
+- Limites T16 corrigees: contenu edite et fusionne controle a la validation, a l'archive et a l'ecriture (secrets, `.mcp.json`/`.codex/config.toml`/hooks d'agents figes hors mise en forme, scripts de hooks non modifiables, nom de skill conserve, chemins sensibles interdits); validation perimee bloquee cote interface et serveur.
+- Tests: `tests/test_filesystem_write.py` (21: destinations dangereuses, liens symboliques sur le chemin, la cible et un sous-dossier, FIFO, dossier nouveau/existant, identique/different, conserver/remplacer/fusionner, refus d'ecrasement sans decision, confirmation, modification concurrente avant et pendant l'ecriture, echec d'ecriture avec restauration et suppression des dossiers crees, secrets, MCP/hooks/skills, chemins sensibles), API (parcours compare/confirm/409/sauvegarde, secret bloque sur validate/archive/compare), skills et MCP approuves ecrits a l'identique et skill modifie bloquant, recette Firefox `test_local_write_journey`.
+- Resultats locaux: 230 tests OK (10 ignores: 9 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil); recette Firefox headless 9/9; compilation Python et `node --check` PASS; Bandit 1.9.4 aucune alerte au seuil CI; Gitleaks 8.30.1 aucune fuite.
+- Documentation: docs/LOCAL_WRITE.md (parcours, garanties, sauvegarde, restauration manuelle), CONTRACTS, SECURITY, ARCHITECTURE, README, AGENTS.
+- Limites: Linux et macOS uniquement (ZIP ailleurs); fusion manuelle sans fusion a trois voies; fichier existant binaire ou > 256 Kio: conserver ou remplacer; configurations MCP/hooks existantes non fusionnables; detection de secrets par motifs (Gitleaks reste la reference); `.forge-backup/` a exclure du depot par l'utilisateur; jeton invalide apres redemarrage du serveur.
 

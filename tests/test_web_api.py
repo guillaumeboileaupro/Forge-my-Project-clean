@@ -196,6 +196,60 @@ class ApiServerTests(unittest.TestCase):
         self.assertEqual((status, validated[0], archived[0]), (200, 200, 200))
         self.assertEqual(writes, [])
 
+    def test_local_write_flow_compare_confirm_backup(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"FORGE_WRITE_ROOT": tmp}):
+            root = Path(tmp).resolve()
+            (root / "existant").mkdir()
+            dest = root / "existant"
+            (dest / "README.md").write_text("Mon README\n")
+            status, _, body = self.post("/api/destination/browse", {})
+            self.assertEqual((status, json.loads(body)["directories"]), (200, ["existant"]))
+            self.assertEqual(self.post("/api/destination/browse", {"path": "/etc"})[0], 400)
+
+            _, _, body = self.post("/api/plan", {"config": CONFIG})
+            files = json.loads(body)["contents"]
+            files["AGENTS.md"] += "\nRelu.\n"
+            request = {"config": CONFIG, "files": files, "destination": str(dest)}
+            status, _, body = self.post("/api/write/compare", request)
+            comparison = json.loads(body)
+            self.assertEqual(status, 200, comparison)
+            self.assertEqual(comparison["summary"]["conflict"], 1)
+            self.assertEqual(comparison["summary"]["new"], len(files) - 1)
+            self.assertEqual(list(dest.iterdir()), [dest / "README.md"])  # comparaison sans ecriture
+
+            apply = dict(request, token=comparison["token"], decisions={"README.md": {"action": "replace"}})
+            status, _, body = self.post("/api/write/apply", apply)
+            self.assertEqual(status, 400)
+            self.assertIn("Confirmation", json.loads(body)["error"])
+            status, _, body = self.post("/api/write/apply", dict(apply, confirm=True, files=dict(files, **{"AGENTS.md": "autre"})))
+            self.assertEqual(status, 409)
+            self.assertEqual(list(dest.iterdir()), [dest / "README.md"])
+
+            status, _, body = self.post("/api/write/apply", dict(apply, confirm=True))
+            report = json.loads(body)["report"]
+            self.assertEqual(status, 200, report)
+            self.assertEqual(report["summary"]["replaced"], 1)
+            self.assertTrue((dest / "AGENTS.md").read_text().endswith("Relu.\n"))
+            self.assertEqual((dest / report["backup"] / "README.md").read_text(), "Mon README\n")
+            self.assertIn("journal", report)
+            # Meme jeton une seconde fois : la destination a change, validation perimee.
+            self.assertEqual(self.post("/api/write/apply", dict(apply, confirm=True))[0], 409)
+
+    def test_editor_secret_blocks_validation_archive_and_write(self):
+        _, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        files["README.md"] += "ghp_" + "a" * 36 + "\n"
+        for path in ("/api/files/validate", "/api/archive", "/api/write/compare"):
+            with self.subTest(path=path):
+                payload = {"config": CONFIG, "files": files}
+                if path == "/api/write/compare":
+                    payload["destination"] = "/tmp/x"
+                status, _, body = self.post(path, payload)
+                self.assertEqual(status, 400)
+                self.assertIn("jeton GitHub", json.loads(body)["error"])
+
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))
         with mock.patch("forge.pipeline.verify_plan", return_value=failing):

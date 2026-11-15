@@ -185,5 +185,26 @@ class SkillsApiTests(unittest.TestCase):
                 status, data = self.post_json("/api/archive", {"config": CONFIG, "files": dict(files, **{extra: "{}"})})
                 self.assertEqual(status, 400)
 
+    def test_local_write_preserves_approved_skill_and_mcp(self):
+        import tempfile as tf
+        request, files = self.edited_request()
+        with tf.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"FORGE_WRITE_ROOT": tmp}):
+            dest = os.path.join(os.path.realpath(tmp), "shop-web")
+            status, data = self.post_json("/api/write/compare", dict(request, files=files, destination=dest))
+            self.assertEqual(status, 200, data)
+            status, data = self.post_json("/api/write/apply", dict(request, files=files, destination=dest,
+                                                                   token=data["token"], decisions={}, confirm=True))
+            self.assertEqual(status, 200, data)
+            for path in (".claude/skills/webapp-testing/SKILL.md", ".mcp.json", ".codex/config.toml"):
+                with open(os.path.join(dest, path), encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), files[path])
+            copied = [n for _, _, names in os.walk(os.path.join(dest, ".claude/skills")) for n in names]
+            self.assertFalse([n for n in copied if n.endswith(".py")])
+            # Un skill modifie depuis l'approbation bloque l'ecriture comme l'archive.
+            self.client = FakeClient(repos=modified_repos("skills/webapp-testing/SKILL.md", "change"))
+            status, data = self.post_json("/api/write/compare", dict(request, files=files, destination=dest))
+            self.assertEqual(status, 422)
+            self.assertIn("skill-modified", [x["code"] for x in data["diagnostics"]])
+
 if __name__ == "__main__":
     unittest.main()

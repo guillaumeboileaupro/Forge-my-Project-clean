@@ -6,7 +6,7 @@ const $ = selector => document.querySelector(selector);
 const NAME = /^[a-z][a-z0-9-]{1,48}[a-z0-9]$/;
 const state = {catalog: null, step: 0, lastConfig: null, ready: false, profiles: {}, saveTimer: null,
   approvals: [], candidates: [], decisions: {}, approvalStatus: {}, originalFiles: {}, previewFiles: {},
-  selectedPath: null, filesValidated: false};
+  selectedPath: null, filesValidated: false, writeRoot: '', comparison: null, resolutions: {}, conflictPath: null};
 const DRAFT_KEY = 'forge-my-project.draft.v1';
 const ANSWERS_FORMAT = 'forge-my-project/answers';
 const MAX_IMPORT_BYTES = 65536;
@@ -261,6 +261,8 @@ function updateEditorState() {
 function invalidateFiles() {
   state.filesValidated = false;
   $('#download').disabled = true;
+  $('#local-write').disabled = true;
+  resetComparison();
 }
 
 function renderFiles(contents) {
@@ -316,6 +318,7 @@ async function validateFiles() {
     if (!response.ok || !payload.ok) throw new Error(payload.error || 'contenus refuses');
     state.filesValidated = true;
     $('#download').disabled = false;
+    $('#local-write').disabled = false;
     $('#status').textContent = `${payload.files.length} fichier(s) valide(s), dont ${payload.modified.length} modifie(s).`;
   } catch (error) {
     invalidateFiles();
@@ -395,6 +398,212 @@ async function download() {
   } catch (error) {
     $('#status').textContent = `Erreur : ${error.message}`;
   }
+}
+
+// --- Ecriture locale : destination, comparaison, fusion, confirmation (T17) --
+function resetComparison(message = '') {
+  state.comparison = null;
+  state.resolutions = {};
+  state.conflictPath = null;
+  $('#comparison').hidden = true;
+  $('#conflict').hidden = true;
+  $('#write-confirm').checked = false;
+  $('#write').disabled = true;
+  if (message) $('#write-report').textContent = message;
+}
+
+function writeBody(extra) {
+  const request = JSON.parse(filesRequestBody());
+  return JSON.stringify(Object.assign(request, {destination: $('#destination').value.trim()}, extra));
+}
+
+async function browseDestination(path) {
+  showAlert('');
+  try {
+    const response = await post('/api/destination/browse', JSON.stringify(path ? {path} : {}));
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'dossier refuse');
+    state.writeRoot = payload.root;
+    $('#dest-root').textContent = payload.root;
+    $('#destination').value = payload.path;
+    $('#browse-up').disabled = payload.parent === null;
+    $('#browse-up').dataset.parent = payload.parent || '';
+    const list = $('#dest-dirs');
+    list.replaceChildren();
+    for (const name of payload.directories) {
+      const button = element('button', {type: 'button', 'data-dir': name}, name);
+      button.addEventListener('click', () => browseDestination(`${payload.path}/${name}`));
+      const item = element('li');
+      item.append(button);
+      list.append(item);
+    }
+    resetComparison();
+  } catch (error) {
+    showAlert(`Parcours refuse : ${error.message}`);
+  }
+}
+
+const STATUS_LABELS = {new: 'nouveau', identical: 'identique', conflict: 'conflit', blocked: 'bloque'};
+const RESOLUTION_LABELS = {keep: 'conserve', replace: 'remplace', merge: 'fusionne'};
+const OPERATION_LABELS = {created: 'cree', replaced: 'remplace', merged: 'fusionne', kept: 'conserve', identical: 'identique', 'rolled-back': 'annule'};
+
+function renderComparison() {
+  const {entries, summary, destination} = state.comparison;
+  $('#comparison').hidden = false;
+  $('#compare-summary').textContent = `${destination.exists ? 'Dossier existant' : 'Nouveau dossier'}${destination.writable ? '' : ' (NON accessible en ecriture)'} : `
+    + `${summary.new} nouveau(x), ${summary.identical} identique(s), ${summary.conflict} conflit(s), ${summary.blocked} bloque(s).`;
+  const list = $('#compare-list');
+  list.replaceChildren();
+  for (const entry of entries) {
+    const item = element('li', {'data-entry': entry.path, 'data-status': entry.status});
+    const button = element('button', {type: 'button'}, entry.path);
+    button.disabled = entry.status !== 'conflict';
+    button.addEventListener('click', () => selectConflict(entry.path));
+    const css = entry.status === 'conflict' || entry.status === 'blocked' ? 'warning' : 'ok';
+    const resolution = state.resolutions[entry.path];
+    const label = entry.status === 'conflict' ? (resolution ? `conflit : ${RESOLUTION_LABELS[resolution.action]}` : 'conflit : a decider')
+      : STATUS_LABELS[entry.status];
+    item.append(button, element('span', {class: `tag ${entry.status === 'blocked' ? 'error' : css}`}, label));
+    list.append(item);
+  }
+  updateWriteButton();
+}
+
+function selectConflict(path) {
+  const entry = state.comparison.entries.find(e => e.path === path);
+  state.conflictPath = path;
+  $('#conflict').hidden = false;
+  $('#conflict-title').textContent = path;
+  $('#conflict-reason').textContent = entry.reason;
+  $('#diff').textContent = entry.diff || '(diff indisponible : contenu binaire ou trop volumineux)';
+  document.querySelector('input[name="resolution"][value="merge"]').disabled = !entry.mergeable;
+  const current = state.resolutions[path];
+  document.querySelectorAll('input[name="resolution"]').forEach(radio => { radio.checked = current ? radio.value === current.action : false; });
+  $('#merge').hidden = !current || current.action !== 'merge';
+  $('#merge-content').value = current && current.action === 'merge' ? current.content : (entry.existing || '');
+  $('#diff').focus();
+}
+
+function resolutionChanged() {
+  const path = state.conflictPath;
+  const checked = document.querySelector('input[name="resolution"]:checked');
+  if (!path || !checked) return;
+  if (checked.value === 'merge') {
+    $('#merge').hidden = false;
+    state.resolutions[path] = {action: 'merge', content: $('#merge-content').value};
+  } else {
+    $('#merge').hidden = true;
+    state.resolutions[path] = {action: checked.value};
+  }
+  renderComparison();
+}
+
+function updateWriteButton() {
+  const comparison = state.comparison;
+  const pending = comparison ? comparison.entries.filter(e => e.status === 'conflict' && !state.resolutions[e.path]).length : 0;
+  const blocked = comparison ? comparison.summary.blocked : 0;
+  $('#write').disabled = !comparison || pending > 0 || blocked > 0 || !comparison.destination.writable || !$('#write-confirm').checked;
+  if (comparison && (pending || blocked)) {
+    $('#write-report').textContent = blocked ? 'Ecriture impossible : entrees non sures (liens symboliques, fichiers speciaux) dans la destination.'
+      : `${pending} conflit(s) sans decision : conserver, remplacer ou fusionner chaque fichier.`;
+  } else if (comparison) {
+    $('#write-report').textContent = '';
+  }
+}
+
+function stillValid() {
+  if (state.lastConfig !== requestBody() || !state.filesValidated) {
+    invalidateFiles();
+    $('#status').textContent = 'La configuration ou les fichiers ont change : verifier et valider a nouveau.';
+    return false;
+  }
+  return true;
+}
+
+async function compareDestination() {
+  showAlert('');
+  if (!stillValid()) return;
+  resetComparison();
+  if (!$('#destination').value.trim() && state.writeRoot) $('#destination').value = `${state.writeRoot}/${buildConfig().name}`;
+  $('#status').textContent = 'Comparaison avec la destination...';
+  try {
+    const response = await post('/api/write/compare', writeBody({}));
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      if (payload.diagnostics && payload.diagnostics.length) renderReport(payload);
+      throw new Error(payload.error || 'comparaison refusee');
+    }
+    state.comparison = payload;
+    renderComparison();
+    $('#status').textContent = 'Comparaison terminee : aucune ecriture effectuee.';
+  } catch (error) {
+    $('#status').textContent = `Comparaison refusee : ${error.message}`;
+  }
+}
+
+function renderWriteReport(report, title) {
+  const container = $('#write-report');
+  container.replaceChildren(element('p', {class: report.status === 'ok' ? 'ok' : 'error'}, title));
+  if (report.backup) container.append(element('p', {}, `Sauvegarde des fichiers remplaces : ${report.destination}/${report.backup} (voir MANIFEST.json pour restaurer).`));
+  if (report.summary) {
+    const s = report.summary;
+    container.append(element('p', {}, `${s.created} cree(s), ${s.replaced} remplace(s), ${s.merged} fusionne(s), ${s.kept} conserve(s), ${s.identical} identique(s).`));
+  }
+  const list = element('ul', {id: 'write-operations'});
+  for (const op of report.operations) list.append(element('li', {'data-op': op.action}, `${OPERATION_LABELS[op.action] || op.action} : ${op.path}`));
+  container.append(list);
+  if (report.journal && report.journal.non_verifie.length) {
+    const unverified = element('ul');
+    for (const message of report.journal.non_verifie) unverified.append(element('li', {class: 'warning'}, message));
+    container.append(element('p', {}, 'Avertissements (a relire, non bloquants) :'), unverified);
+  }
+  for (const message of report.restore_errors || []) container.append(element('p', {class: 'error'}, `Restauration incomplete : ${message}`));
+}
+
+async function writeFiles() {
+  showAlert('');
+  if (!stillValid() || !state.comparison) return;
+  const {summary, destination} = state.comparison;
+  const replaced = Object.values(state.resolutions).filter(r => r.action !== 'keep').length;
+  if (!window.confirm(`Ecrire dans ${destination.path} : ${summary.new} creation(s), ${replaced} remplacement(s) ou fusion(s) sauvegarde(s) ? Cette action modifie le dossier.`)) return;
+  $('#write').disabled = true;
+  $('#status').textContent = 'Controles repetes puis ecriture...';
+  try {
+    const response = await post('/api/write/apply', writeBody({token: state.comparison.token, decisions: state.resolutions, confirm: true}));
+    const payload = await response.json();
+    if (response.ok && payload.ok) {
+      renderWriteReport(payload.report, 'Ecriture terminee.');
+      state.comparison = null;
+      $('#comparison').hidden = true;
+      $('#status').textContent = `Fichiers ecrits dans ${destination.path}.`;
+      return;
+    }
+    if (response.status === 409) {
+      resetComparison();
+      if (payload.report) renderWriteReport(payload.report, 'Ecriture annulee, etat precedent restaure.');
+      $('#status').textContent = `${payload.error}`;
+      return;
+    }
+    if (payload.report) renderWriteReport(payload.report, 'Ecriture interrompue : modifications annulees.');
+    throw new Error(payload.error || 'ecriture refusee');
+  } catch (error) {
+    $('#status').textContent = `Ecriture refusee : ${error.message}`;
+    updateWriteButton();
+  }
+}
+
+function setupLocalWrite() {
+  $('#browse').addEventListener('click', () => browseDestination($('#destination').value.trim()));
+  $('#browse-up').addEventListener('click', event => browseDestination(event.currentTarget.dataset.parent));
+  $('#compare').addEventListener('click', compareDestination);
+  $('#destination').addEventListener('input', () => resetComparison());
+  document.querySelectorAll('input[name="resolution"]').forEach(radio => radio.addEventListener('change', resolutionChanged));
+  $('#merge-content').addEventListener('input', () => {
+    if (state.conflictPath && state.resolutions[state.conflictPath]) state.resolutions[state.conflictPath].content = $('#merge-content').value;
+  });
+  $('#write-confirm').addEventListener('change', updateWriteButton);
+  $('#write').addEventListener('click', writeFiles);
+  browseDestination('');
 }
 
 // --- Application de reponses validees (brouillon, import, profil) ---------
@@ -857,6 +1066,7 @@ async function init() {
   $('#revert-file').addEventListener('click', revertFile);
   $('#validate-files').addEventListener('click', validateFiles);
   $('#download').addEventListener('click', download);
+  setupLocalWrite();
   $('#export').addEventListener('click', exportAnswers);
   $('#import').addEventListener('change', importAnswers);
   $('#reset').addEventListener('click', resetForm);
