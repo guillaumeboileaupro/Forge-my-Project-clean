@@ -99,7 +99,7 @@
       "Commits au format Conventional Commits.",
       "CI verte et revue de la PR avant fusion ; supprimer la branche apres fusion.",
       "Mettre a jour TODO.md (temps reel et ecart) a la fin de chaque tache.",
-      "La protection de branche et les permissions GitHub doivent etre configurees sur le depot distant par son proprietaire.",
+      "La protection de branche et les permissions GitHub doivent etre configurees sur le depot distant par son proprietaire : commande fournie dans CONTRIBUTING.md (section Protection de la branche main).",
       "La CI .github/workflows/ci.yml execute les commandes de ce document ; ses actions sont epinglees par SHA et ses permissions limitees a la lecture.",
       "Activer les hooks Git des le clonage : git config core.hooksPath .githooks (pre-commit : secrets, formatage, lint ; commit-msg : Conventional Commits ; pre-push : typage et tests)."
     ],

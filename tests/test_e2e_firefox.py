@@ -142,6 +142,12 @@ class FirefoxFormTests(unittest.TestCase):
         self.cmd("POST", "/element/%s/clear" % self.find(css), {})
         self.cmd("POST", "/element/%s/value" % self.find(css), {"text": text})
 
+    def validate_files(self):
+        """Confirme les avertissements eventuels (exigence : avertissement et confirmation) puis valide."""
+        if self.js("return document.querySelector('#ack-warnings') !== null && !document.querySelector('#ack-warnings').checked"):
+            self.click("#ack-warnings")
+        self.click("#validate-files")
+
     def checked(self, css):
         return self.js("return document.querySelector(arguments[0]).checked", css)
 
@@ -265,7 +271,7 @@ class FirefoxFormTests(unittest.TestCase):
         self.assertNotEqual(self.js("return document.querySelector('#file-title').textContent"), "AGENTS.md")
         self.click('[data-path="AGENTS.md"]')
         self.assertIn("Ajout relu.", self.js("return document.querySelector('#content').value"))
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return !document.querySelector('#download').disabled")
         self.assertIn("1 modifie", self.js("return document.querySelector('#status').textContent"))
         self.screenshot("verification")
@@ -319,7 +325,7 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('[data-goto="5"]')
         self.click("#check")
         self.wait("return !document.querySelector('#preview').hidden")
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return !document.querySelector('#download').disabled")
 
     def test_mcp_selection(self):
@@ -355,7 +361,7 @@ class FirefoxFormTests(unittest.TestCase):
         # Edition de la documentation MCP, validation puis archive : l'edition est dans le ZIP.
         self.click('[data-path="docs/MCP.md"]')
         self.js("const e=document.querySelector('#content'); e.value += '\\nRelu avant activation.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return !document.querySelector('#download').disabled")
         archive = self.capture_archive()
         self.assertTrue(archive.read("mcp-demo/docs/MCP.md").decode().endswith("Relu avant activation.\n"))
@@ -365,7 +371,7 @@ class FirefoxFormTests(unittest.TestCase):
         self.click("#mcp-github")
         self.assertTrue(self.js("return document.querySelector('#download').disabled"))
         self.click('[data-goto="5"]')
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return document.querySelector('#status').textContent.includes('relancer la verification')")
         self.click("#check")
         self.wait("return !document.querySelector('#preview').hidden && !document.querySelector('[data-path=\"docs/MCP.md\"]')")
@@ -412,7 +418,7 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('[data-path="%s"]' % path)
         self.js("const e=document.querySelector('#content'); e.value += '\\nNote locale.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
         self.assertFalse(self.js("return document.querySelector('[data-modified=\"%s\"]').hidden" % path))
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return !document.querySelector('#download').disabled")
         archive = self.capture_archive()
         self.assertTrue(archive.read("skills-edit/" + path).decode().endswith("Note locale.\n"))
@@ -441,7 +447,7 @@ class FirefoxFormTests(unittest.TestCase):
         self.wait("return !document.querySelector('#preview').hidden")
         self.click('[data-path="AGENTS.md"]')
         self.js("const e=document.querySelector('#content'); e.value += '\\nEdition locale.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
-        self.click("#validate-files")
+        self.validate_files()
         self.wait("return !document.querySelector('#local-write').disabled")
         self.assertEqual(self.text("#dest-root"), self.write_root)
         # Navigation dans la racine autorisee jusqu'au dossier existant.
@@ -491,6 +497,54 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('[data-goto="0"]')
         self.cmd("POST", "/element/%s/value" % self.find("#description"), {"text": "x"})
         self.assertTrue(self.js("return document.querySelector('#local-write').disabled"))
+
+    def test_questionnaire_search_suggestion_and_warning_confirmation(self):
+        """T03/T04 : recherche, retour arriere, cascade des dependances, suggestion d'architecture, avertissements."""
+        self.type_text("#name", "quest-demo")
+        self.js("const s=document.querySelector('#project_type'); s.value='api'; s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.click("#next")
+        # Questions progressives : FastAPI n'apparait qu'avec Python.
+        self.assertFalse(self.visible("#tech-fastapi"))
+        self.click("#tech-python")
+        self.assertTrue(self.visible("#tech-fastapi"))
+        self.click("#tech-fastapi")
+        self.click("#tech-pytest")
+        # Recherche : filtre l'affichage sans perdre les choix.
+        self.type_text("#tech-search", "fast")
+        self.assertTrue(self.visible("#tech-fastapi"))
+        self.assertFalse(self.visible("#tech-pytest"))
+        self.assertTrue(self.checked("#tech-pytest"))
+        self.assertIn("affichee", self.text("#tech-search-help"))
+        self.type_text("#tech-search", "")
+        self.js("const e=document.querySelector('#tech-search'); e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.assertTrue(self.visible("#tech-pytest"))
+        # Cascade : retirer Python retire FastAPI et pytest (prerequis disparus).
+        self.click("#tech-python")
+        self.wait("return !document.querySelector('#tech-fastapi').checked && !document.querySelector('#tech-pytest').checked")
+        for css in ("#tech-python", "#tech-fastapi", "#tech-pytest"):
+            self.click(css)
+        self.click("#next")
+        self.click('input[name="agent"][value="codex"]')
+        # Retour arriere vers la section projet, puis suggestion modifiable.
+        self.click("#prev")
+        self.click("#prev")
+        self.click("#prev")
+        self.js("document.querySelector('#architecture').closest('details').open = true")
+        self.click("#architecture-suggest")
+        self.wait("return document.querySelector('#architecture').value.includes('Couche HTTP')")
+        self.js("const e=document.querySelector('#architecture'); e.value += '\\n- Module facturation isole.'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        # Avertissements (description vide) : confirmation exigee avant validation.
+        self.click('[data-goto="5"]')
+        self.click("#check")
+        self.wait("return !document.querySelector('#preview').hidden")
+        self.click('[data-path="docs/ARCHITECTURE.md"]')
+        self.assertIn("Module facturation isole.", self.js("return document.querySelector('#content').value"))
+        self.assertTrue(self.js("return document.querySelector('#ack-warnings') !== null"))
+        self.click("#validate-files")
+        self.assertIn("avertissements", self.text("#status"))
+        self.assertTrue(self.js("return document.querySelector('#download').disabled"))
+        self.validate_files()
+        self.wait("return !document.querySelector('#download').disabled")
 
 if __name__ == "__main__":
     unittest.main()

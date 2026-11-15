@@ -19,3 +19,26 @@
 {{#each sections.dod}}
 - [ ] {{ this }}
 {{/each}}
+
+## Protection de la branche main (proprietaire du depot)
+Forge-my-Project ne cree ni ne configure le depot distant. Apres le premier push, le proprietaire impose le workflow ci-dessus a distance (API REST GitHub « Update branch protection », droits administrateur requis), depuis le clone local avec la CLI `gh` authentifiee :
+
+```bash
+gh api --method PUT "repos/{owner}/{repo}/branches/main/protection" --input - <<'JSON'
+{
+  "required_status_checks": { "strict": true, "checks": [ { "context": "Qualite et tests" }, { "context": "Securite (secrets, SAST, dependances, SBOM)" } ] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": { "required_approving_review_count": 0, "dismiss_stale_reviews": true },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
+```
+
+- Effet : fusion uniquement par PR, CI verte et branche a jour obligatoires, push force et suppression de `main` interdits, administrateurs compris.
+- `required_approving_review_count` vaut 0 car l'auteur d'une PR ne peut pas l'approuver lui-meme ; le passer a 1 si un second relecteur humain existe.
+- Les noms des controles requis sont ceux des jobs de `.github/workflows/ci.yml` ; les mettre a jour si ces jobs sont renommes.
+- Depot prive : la protection de branche exige un plan GitHub Pro, Team ou Enterprise (documentation GitHub). Verifier ensuite avec `gh api "repos/{owner}/{repo}/branches/main/protection"`.
+

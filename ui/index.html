@@ -70,13 +70,17 @@
           <summary>Architecture definie manuellement (optionnel)</summary>
           <label for="architecture">Architecture</label>
           <textarea id="architecture" name="architecture" maxlength="4000" rows="5" aria-describedby="architecture-help"></textarea>
-          <p id="architecture-help" class="help">Si renseignee, elle remplace la suggestion des regles locales.</p>
+          <p id="architecture-help" class="help">Si renseignee, elle remplace la suggestion des regles locales. La suggestion peut etre reprise ici puis modifiee.</p>
+          <button type="button" id="architecture-suggest">Proposer l'architecture des regles locales</button>
         </details>
       </section>
 
       <section class="step" aria-labelledby="h-tech" hidden>
         <h2 id="h-tech">2. Technologies</h2>
         <p class="help">Les choix dependants apparaissent quand leurs prerequis sont selectionnes.</p>
+        <label for="tech-search">Rechercher une technologie</label>
+        <input type="search" id="tech-search" autocomplete="off" aria-describedby="tech-search-help">
+        <p id="tech-search-help" class="help" aria-live="polite">Filtre l'affichage par nom ou description ; les choix deja faits sont conserves.</p>
         <div id="tech-groups"></div>
         <ul id="tech-hints" class="hints" aria-live="polite"></ul>
       </section>

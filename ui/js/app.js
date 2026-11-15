@@ -6,7 +6,7 @@ const $ = selector => document.querySelector(selector);
 const NAME = /^[a-z][a-z0-9-]{1,48}[a-z0-9]$/;
 const state = {catalog: null, step: 0, lastConfig: null, ready: false, profiles: {}, saveTimer: null,
   approvals: [], candidates: [], decisions: {}, approvalStatus: {}, originalFiles: {}, previewFiles: {},
-  selectedPath: null, filesValidated: false, writeRoot: '', comparison: null, resolutions: {}, conflictPath: null};
+  selectedPath: null, filesValidated: false, pendingWarnings: 0, writeRoot: '', comparison: null, resolutions: {}, conflictPath: null};
 const DRAFT_KEY = 'forge-my-project.draft.v1';
 const ANSWERS_FORMAT = 'forge-my-project/answers';
 const MAX_IMPORT_BYTES = 65536;
@@ -118,6 +118,56 @@ function updateConditional() {
   }
   const list = $('#tech-hints');
   list.replaceChildren(...hints.map(text => element('li', {}, text)));
+  filterTechnologies();
+}
+
+function normalize(text) {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function filterTechnologies() {
+  const term = normalize($('#tech-search').value.trim());
+  let shown = 0;
+  for (const row of document.querySelectorAll('.tech[data-tech]')) {
+    const label = row.querySelector('label');  // nom et description, sans les options de version
+    const match = !term || normalize(`${row.dataset.tech} ${label ? label.textContent : ''} ${row.querySelector('.help')?.textContent || ''}`).includes(term);
+    row.classList.toggle('filtered', !match);
+    if (match && !row.hidden) shown += 1;
+  }
+  for (const fieldset of document.querySelectorAll('[data-category]')) {
+    const rows = [...fieldset.querySelectorAll('.tech')];
+    fieldset.hidden = rows.every(row => row.hidden || row.classList.contains('filtered'));
+  }
+  $('#tech-search-help').textContent = term ? `${shown} technologie(s) affichee(s) pour « ${$('#tech-search').value.trim()} » ; les choix deja faits sont conserves.`
+    : 'Filtre l\'affichage par nom ou description ; les choix deja faits sont conserves.';
+}
+
+async function suggestArchitecture() {
+  showAlert('');
+  const errors = updateBadges();
+  const first = errors.findIndex(list => list.length);
+  if (first >= 0 && first < 3) {
+    $('#status').textContent = `Section ${first + 1} incomplete : la suggestion depend du type, des technologies et des agents.`;
+    return;
+  }
+  const field = $('#architecture');
+  if (field.value.trim() && !window.confirm('Remplacer l\'architecture saisie par la suggestion des regles locales ?')) return;
+  try {
+    const config = buildConfig();
+    config.architecture = '';
+    const response = await post('/api/plan', JSON.stringify({config}));
+    const payload = await response.json();
+    if (!response.ok || !payload.architecture) throw new Error(payload.error || 'configuration incomplete');
+    if (!payload.architecture.suggested.length) {
+      $('#status').textContent = 'Aucune architecture suggeree par les regles locales pour cette configuration : saisie manuelle.';
+      return;
+    }
+    field.value = payload.architecture.suggested.map(line => `- ${line}`).join('\n');
+    field.dispatchEvent(new Event('input', {bubbles: true}));
+    $('#status').textContent = 'Architecture proposee par les regles locales : la relire et l\'adapter.';
+  } catch (error) {
+    $('#status').textContent = `Suggestion impossible : ${error.message}`;
+  }
 }
 
 // --- Validation et navigation ---------------------------------------------
@@ -205,6 +255,8 @@ function renderReport(payload) {
   const blocking = payload.diagnostics.filter(d => d.severity === 'error').length;
   report.append(element('p', {class: blocking ? 'error' : 'ok'},
     blocking ? `${blocking} erreur(s) bloquante(s) : generation impossible.` : 'Configuration valide. Relire les avertissements avant de telecharger.'));
+  const warnings = payload.diagnostics.filter(d => d.severity === 'warning').length;
+  state.pendingWarnings = blocking ? 0 : warnings;
   if (payload.error && !payload.diagnostics.length) report.append(element('p', {class: 'error'}, payload.error));
   const list = element('ul', {class: 'diagnostics'});
   for (const diag of payload.diagnostics) {
@@ -219,6 +271,18 @@ function renderReport(payload) {
     }
     report.append(element('h3', {}, 'Verification en ligne'), table);
   }
+  if (state.pendingWarnings) {
+    // Element optionnel absent ou non verifie : avertissement et confirmation explicite.
+    const label = element('label', {class: 'check', id: 'ack-warnings-label'});
+    label.append(element('input', {type: 'checkbox', id: 'ack-warnings'}),
+      ` J'ai pris connaissance des ${state.pendingWarnings} avertissement(s) et je poursuis.`);
+    report.append(label);
+  }
+}
+
+function warningsAcknowledged() {
+  const box = document.querySelector('#ack-warnings');
+  return !state.pendingWarnings || Boolean(box && box.checked);
 }
 
 function isModified(path) {
@@ -308,6 +372,10 @@ async function validateFiles() {
   if (state.lastConfig !== requestBody()) {
     invalidateFiles();
     $('#status').textContent = 'La configuration a change : relancer la verification.';
+    return;
+  }
+  if (!warningsAcknowledged()) {
+    $('#status').textContent = 'Confirmer la prise de connaissance des avertissements avant de valider.';
     return;
   }
   $('#status').textContent = 'Validation des contenus modifies...';
@@ -1066,6 +1134,8 @@ async function init() {
   $('#revert-file').addEventListener('click', revertFile);
   $('#validate-files').addEventListener('click', validateFiles);
   $('#download').addEventListener('click', download);
+  $('#tech-search').addEventListener('input', filterTechnologies);
+  $('#architecture-suggest').addEventListener('click', suggestArchitecture);
   setupLocalWrite();
   $('#export').addEventListener('click', exportAnswers);
   $('#import').addEventListener('change', importAnswers);

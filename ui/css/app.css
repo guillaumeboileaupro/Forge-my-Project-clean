@@ -85,3 +85,5 @@ body.forge{max-width:none;margin:0;padding:0}
 .forge .conflict{border:1px solid #8a4b00;border-radius:8px;padding:10px 14px;margin:10px 0}
 .forge #write-report ul{padding-left:18px}
 .forge code{overflow-wrap:anywhere}
+.forge .tech.filtered{display:none}
+.forge #ack-warnings-label{margin-top:10px}
