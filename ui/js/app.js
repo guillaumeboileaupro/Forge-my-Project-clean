@@ -5,7 +5,8 @@
 const $ = selector => document.querySelector(selector);
 const NAME = /^[a-z][a-z0-9-]{1,48}[a-z0-9]$/;
 const state = {catalog: null, step: 0, lastConfig: null, ready: false, profiles: {}, saveTimer: null,
-  approvals: [], candidates: [], decisions: {}, approvalStatus: {}};
+  approvals: [], candidates: [], decisions: {}, approvalStatus: {}, originalFiles: {}, previewFiles: {},
+  selectedPath: null, filesValidated: false};
 const DRAFT_KEY = 'forge-my-project.draft.v1';
 const ANSWERS_FORMAT = 'forge-my-project/answers';
 const MAX_IMPORT_BYTES = 65536;
@@ -188,6 +189,12 @@ function requestBody() {
   return JSON.stringify({config: buildConfig(), verify: $('#net-verify').checked, skills: $('#net-skills').checked});
 }
 
+function filesRequestBody() {
+  const request = JSON.parse(requestBody());
+  request.files = state.previewFiles;
+  return JSON.stringify(request);
+}
+
 async function post(path, body) {
   return fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body});
 }
@@ -214,25 +221,125 @@ function renderReport(payload) {
   }
 }
 
+function isModified(path) {
+  return state.previewFiles[path] !== state.originalFiles[path];
+}
+
+function modifiedPaths() {
+  return Object.keys(state.previewFiles).filter(isModified).sort();
+}
+
+function selectFile(path) {
+  if (!(path in state.previewFiles)) return;
+  state.selectedPath = path;
+  $('#files').querySelectorAll('button[data-path]').forEach(button => {
+    if (button.dataset.path === path) button.setAttribute('aria-pressed', 'true');
+    else button.removeAttribute('aria-pressed');
+  });
+  $('#file-title').textContent = path;
+  $('#content').disabled = false;
+  $('#content').value = state.previewFiles[path];
+  updateEditorState();
+}
+
+function updateEditorState() {
+  const path = state.selectedPath;
+  const changed = path !== null && isModified(path);
+  const count = modifiedPaths().length;
+  $('#edit-status').textContent = changed ? 'Modifie' : 'Non modifie';
+  $('#edit-status').className = `tag ${changed ? 'warning' : 'ok'}`;
+  $('#revert-file').disabled = !changed;
+  $('#validate-files').disabled = Object.keys(state.previewFiles).length === 0;
+  $('#files').querySelectorAll('[data-modified]').forEach(marker => {
+    marker.hidden = !isModified(marker.dataset.modified);
+  });
+  $('#editor-help').textContent = count
+    ? `${count} fichier(s) modifie(s). Valider les contenus avant de creer l'archive.`
+    : 'Aucune modification. Valider cet apercu avant de creer l\'archive.';
+}
+
+function invalidateFiles() {
+  state.filesValidated = false;
+  $('#download').disabled = true;
+}
+
 function renderFiles(contents) {
+  state.originalFiles = Object.assign({}, contents);
+  state.previewFiles = Object.assign({}, contents);
+  state.selectedPath = null;
+  state.filesValidated = false;
   const files = $('#files');
   files.replaceChildren();
+  const directories = new Map([['', files]]);
   for (const path of Object.keys(contents).sort()) {
+    const parts = path.split('/');
+    let prefix = '';
+    for (const directory of parts.slice(0, -1)) {
+      const parent = directories.get(prefix);
+      prefix = prefix ? `${prefix}/${directory}` : directory;
+      if (!directories.has(prefix)) {
+        const item = element('li');
+        item.append(element('div', {class: 'directory'}, directory));
+        const children = element('ul');
+        item.append(children);
+        parent.append(item);
+        directories.set(prefix, children);
+      }
+    }
     const item = element('li');
-    const button = element('button', {type: 'button'}, path);
-    button.addEventListener('click', () => {
-      files.querySelectorAll('button').forEach(b => b.removeAttribute('aria-pressed'));
-      button.setAttribute('aria-pressed', 'true');
-      $('#content').textContent = contents[path];
-    });
+    const button = element('button', {type: 'button', 'data-path': path, title: path});
+    button.append(document.createTextNode(parts[parts.length - 1]));
+    button.append(element('span', {'data-modified': path, class: 'modified-marker', hidden: ''}, ' •'));
+    button.addEventListener('click', () => selectFile(path));
     item.append(button);
-    files.append(item);
+    directories.get(prefix).append(item);
   }
   $('#preview').hidden = false;
   // AGENTS.md est le document principal : il est affiche en premier s'il existe.
-  const buttons = [...files.querySelectorAll('button')];
-  const first = buttons.find(b => b.textContent === 'AGENTS.md') || buttons[0];
+  const buttons = [...files.querySelectorAll('button[data-path]')];
+  const first = buttons.find(b => b.dataset.path === 'AGENTS.md') || buttons[0];
   if (first) first.click();
+  updateEditorState();
+}
+
+async function validateFiles() {
+  if (state.lastConfig !== requestBody()) {
+    invalidateFiles();
+    $('#status').textContent = 'La configuration a change : relancer la verification.';
+    return;
+  }
+  $('#status').textContent = 'Validation des contenus modifies...';
+  $('#validate-files').disabled = true;
+  try {
+    const response = await post('/api/files/validate', filesRequestBody());
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'contenus refuses');
+    state.filesValidated = true;
+    $('#download').disabled = false;
+    $('#status').textContent = `${payload.files.length} fichier(s) valide(s), dont ${payload.modified.length} modifie(s).`;
+  } catch (error) {
+    invalidateFiles();
+    $('#status').textContent = `Validation refusee : ${error.message}`;
+  } finally {
+    $('#validate-files').disabled = Object.keys(state.previewFiles).length === 0;
+  }
+}
+
+function navigateFile(offset) {
+  const paths = Object.keys(state.previewFiles).sort();
+  if (!paths.length) return;
+  const current = Math.max(0, paths.indexOf(state.selectedPath));
+  selectFile(paths[(current + offset + paths.length) % paths.length]);
+  $('#content').focus();
+}
+
+function revertFile() {
+  if (state.selectedPath === null) return;
+  state.previewFiles[state.selectedPath] = state.originalFiles[state.selectedPath];
+  $('#content').value = state.previewFiles[state.selectedPath];
+  invalidateFiles();
+  updateEditorState();
+  $('#status').textContent = `Fichier ${state.selectedPath} retabli depuis l'apercu genere.`;
 }
 
 async function check() {
@@ -252,11 +359,12 @@ async function check() {
     if (response.ok && payload.ok) {
       renderFiles(payload.contents);
       state.lastConfig = body;
-      $('#download').disabled = false;
+      $('#download').disabled = true;
+      $('#status').textContent = 'Verification terminee. Examiner puis valider les fichiers.';
     } else {
       $('#preview').hidden = true;
     }
-    $('#status').textContent = response.ok ? 'Verification terminee.' : 'Configuration refusee.';
+    if (!response.ok) $('#status').textContent = 'Configuration refusee.';
   } catch (error) {
     $('#status').textContent = `Erreur : ${error.message}`;
   }
@@ -264,13 +372,17 @@ async function check() {
 
 async function download() {
   if (state.lastConfig !== requestBody()) {
-    $('#download').disabled = true;
+    invalidateFiles();
     $('#status').textContent = 'La configuration a change : relancer la verification.';
+    return;
+  }
+  if (!state.filesValidated) {
+    $('#status').textContent = 'Valider les contenus avant de creer l\'archive.';
     return;
   }
   $('#status').textContent = 'Controles repetes avant generation...';
   try {
-    const response = await post('/api/archive', state.lastConfig);
+    const response = await post('/api/archive', filesRequestBody());
     if (!response.ok) {
       renderReport(await response.json());
       throw new Error('archive refusee');
@@ -317,7 +429,7 @@ function applyAnswers(answers) {
   document.querySelectorAll('input[name="mcp"]').forEach(input => { input.checked = servers.has(input.value); });
   updateMcp();
   setApprovals(answers.external_skills || []);
-  $('#download').disabled = true;
+  invalidateFiles();
   updateBadges();
 }
 
@@ -388,7 +500,7 @@ function setApprovals(approvals, status = 'non verifiee depuis le chargement') {
 function approvalsChanged() {
   renderApprovals();
   renderCandidates();
-  if (state.lastConfig !== null && state.lastConfig !== requestBody()) $('#download').disabled = true;
+  if (state.lastConfig !== null && state.lastConfig !== requestBody()) invalidateFiles();
   scheduleSave();
 }
 
@@ -573,6 +685,12 @@ function resetForm() {
   updateBadges();
   $('#download').disabled = true;
   $('#preview').hidden = true;
+  state.originalFiles = {};
+  state.previewFiles = {};
+  state.selectedPath = null;
+  state.filesValidated = false;
+  $('#content').value = '';
+  $('#content').disabled = true;
   $('#report').replaceChildren();
   state.candidates = [];
   state.decisions = {};
@@ -713,11 +831,14 @@ async function init() {
   renderMcp();
   document.querySelectorAll('.step h2').forEach(h => h.setAttribute('tabindex', '-1'));
   const form = $('#forge');
-  form.addEventListener('change', () => { updateConditional(); updateMcp(); updateBadges(); scheduleSave(); });
+  form.addEventListener('change', () => {
+    updateConditional(); updateMcp(); updateBadges(); scheduleSave();
+    if (state.lastConfig !== null && state.lastConfig !== requestBody()) invalidateFiles();
+  });
   form.addEventListener('input', () => {
     updateBadges();
     scheduleSave();
-    if (state.lastConfig !== null && state.lastConfig !== requestBody()) $('#download').disabled = true;
+    if (state.lastConfig !== null && state.lastConfig !== requestBody()) invalidateFiles();
   });
   form.addEventListener('submit', event => event.preventDefault());
   $('#prev').addEventListener('click', () => showStep(state.step - 1));
@@ -725,6 +846,16 @@ async function init() {
   document.querySelectorAll('#steps button').forEach(button =>
     button.addEventListener('click', () => showStep(Number(button.dataset.goto))));
   $('#check').addEventListener('click', check);
+  $('#content').addEventListener('input', event => {
+    if (state.selectedPath === null) return;
+    state.previewFiles[state.selectedPath] = event.currentTarget.value;
+    invalidateFiles();
+    updateEditorState();
+  });
+  $('#previous-file').addEventListener('click', () => navigateFile(-1));
+  $('#next-file').addEventListener('click', () => navigateFile(1));
+  $('#revert-file').addEventListener('click', revertFile);
+  $('#validate-files').addEventListener('click', validateFiles);
   $('#download').addEventListener('click', download);
   $('#export').addEventListener('click', exportAnswers);
   $('#import').addEventListener('change', importAnswers);

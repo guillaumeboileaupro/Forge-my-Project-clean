@@ -39,10 +39,18 @@ body.forge{max-width:none;margin:0;padding:0}
 .forge :focus-visible{outline:3px solid #f0a500;outline-offset:2px}
 .forge .actions{display:flex;justify-content:space-between;margin-top:20px}
 .forge .preview{display:grid;grid-template-columns:minmax(180px,280px) minmax(0,1fr);gap:12px;margin-top:12px}
+.forge .file-explorer,.forge .file-editor{min-width:0}
+.forge .file-explorer h3,.forge .file-editor h3{margin:0 0 8px}
 .forge .files{list-style:none;padding:0;margin:0;max-height:480px;overflow:auto}
+.forge .files ul{list-style:none;padding-left:14px;margin:0;border-left:1px solid #d6dde8}
+.forge .files .directory{font-size:.82rem;font-weight:700;color:#57657a;margin:7px 0 2px}
 .forge .files button{width:100%;text-align:left;font-size:.85rem;padding:6px 8px;margin:2px 0;border-color:#d6dde8;color:#1c2435;overflow-wrap:anywhere}
 .forge .files button[aria-pressed=true]{background:#e8eefb;border-color:#1a4bb0}
-.forge pre{margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;max-height:480px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
+.forge .editor-heading{display:flex;gap:10px;justify-content:space-between;align-items:center}
+.forge #content{margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-color:#0f172a;border-radius:8px;width:100%;min-height:360px;resize:vertical;white-space:pre;overflow:auto;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2}
+.forge #content:disabled{opacity:.7}
+.forge .editor-actions{align-items:center}
+.forge .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .forge [hidden]{display:none !important}
 @media (max-width:760px){
   .forge .layout{grid-template-columns:1fr;padding:12px 16px}

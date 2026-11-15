@@ -21,7 +21,7 @@ P1 -> P2; P1 -> P3; P2 + P3 -> P4; P3 + P4 -> P5; P2 + P3 -> P6; P1-P6 -> P7. Le
 Chaque phase peut etre divisee en plusieurs PR successives. Un seul agent developpeur a la fois. Pour chaque tache: implementation minimale, tests locaux, audit applicable, documentation et TODO a jour, PR unique, CI verte, revue, fusion et nettoyage. Ne jamais contourner les checks pour marquer DONE.
 
 ## Coordination des composants
-T02 fixe les contrats de compatibilite dans docs/CONTRACTS.md et isole le prototype sous des modules `legacy`. Codex garde la couche UI et, dans les phases prevues, la gestion des fichiers. Claude developpe T06-T11 dans les espaces rules, planner, catalogs, generator moderne, skills et verification. Toute substitution de la facade historique doit conserver les signatures et tests contractuels ou faire l'objet d'une decision documentee.
+T02 fixe les contrats de compatibilite dans docs/CONTRACTS.md et isole le prototype sous des modules `legacy`. Codex garde la couche UI et la gestion des fichiers: T16 valide l'apercu edite sans effet de bord; T17 ajoutera les operations locales confirmees. Claude developpe les catalogues, rules/planner, generation moderne, skills, verification et MCP. Toute substitution de la facade historique doit conserver les signatures et tests contractuels ou faire l'objet d'une decision documentee.
 
 ## Attention au perimetre
 Le generateur ne produit PAS le code metier du projet cible. GitHub est source de skills et plateforme de CI des projets futurs, mais Forge-my-Project ne cree ni ne pousse de depot pour eux. Aucun LLM integre. Les MCP sont facultatifs.

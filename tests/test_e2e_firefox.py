@@ -5,6 +5,7 @@ Active uniquement avec FORGE_E2E=1 et geckodriver + firefox disponibles :
 Protocole WebDriver W3C pilote avec urllib : aucune dependance tierce.
 """
 import base64
+import io
 import json
 import os
 import shutil
@@ -15,6 +16,7 @@ import threading
 import time
 import unittest
 import urllib.request
+import zipfile
 from unittest import mock
 
 from server import Handler, ThreadingHTTPServer
@@ -246,11 +248,23 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('input[name="agent"][value="claude"]')
         self.click('[data-goto="5"]')
         self.click("#check")
-        self.wait("return !document.querySelector('#download').disabled")
-        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
+        self.wait("return !document.querySelector('#preview').hidden")
+        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.dataset.path)")
         self.assertIn("AGENTS.md", files)
         self.assertIn("CLAUDE.md", files)
-        self.assertIn("e2e-demo", self.js("return document.querySelector('#content').textContent"))
+        self.assertIn("e2e-demo", self.js("return document.querySelector('#content').value"))
+        self.assertTrue(self.js("return document.querySelector('#download').disabled"))
+        # Edition, indication du changement, navigation et validation serveur.
+        self.js("const e=document.querySelector('#content'); e.value += '\\nAjout relu.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.assertEqual(self.js("return document.querySelector('#edit-status').textContent"), "Modifie")
+        self.assertFalse(self.js("return document.querySelector('[data-modified=\"AGENTS.md\"]').hidden"))
+        self.click("#next-file")
+        self.assertNotEqual(self.js("return document.querySelector('#file-title').textContent"), "AGENTS.md")
+        self.click('[data-path="AGENTS.md"]')
+        self.assertIn("Ajout relu.", self.js("return document.querySelector('#content').value"))
+        self.click("#validate-files")
+        self.wait("return !document.querySelector('#download').disabled")
+        self.assertIn("1 modifie", self.js("return document.querySelector('#status').textContent"))
         self.screenshot("verification")
         # Une modification invalide l'apercu valide.
         self.click('[data-goto="0"]')
@@ -301,6 +315,8 @@ class FirefoxFormTests(unittest.TestCase):
         self.assertTrue(self.visible("#skills-empty"))
         self.click('[data-goto="5"]')
         self.click("#check")
+        self.wait("return !document.querySelector('#preview').hidden")
+        self.click("#validate-files")
         self.wait("return !document.querySelector('#download').disabled")
 
     def test_mcp_selection(self):
@@ -328,18 +344,79 @@ class FirefoxFormTests(unittest.TestCase):
         self.js("const s=document.querySelector('#project_type'); s.value='web'; s.dispatchEvent(new Event('change',{bubbles:true}))")
         self.click('[data-goto="5"]')
         self.click("#check")
-        self.wait("return !document.querySelector('#download').disabled")
-        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
+        self.wait("return !document.querySelector('#preview').hidden")
+        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.dataset.path)")
         self.assertIn(".mcp.json", files)
         self.assertIn("docs/MCP.md", files)
         self.assertNotIn(".codex/config.toml", files)
+        # Edition de la documentation MCP, validation puis archive : l'edition est dans le ZIP.
+        self.click('[data-path="docs/MCP.md"]')
+        self.js("const e=document.querySelector('#content'); e.value += '\\nRelu avant activation.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.click("#validate-files")
+        self.wait("return !document.querySelector('#download').disabled")
+        archive = self.capture_archive()
+        self.assertTrue(archive.read("mcp-demo/docs/MCP.md").decode().endswith("Relu avant activation.\n"))
+        self.assertEqual(json.loads(archive.read("mcp-demo/.mcp.json"))["mcpServers"].keys(), {"github"})
+        # Changer la selection MCP invalide l'apercu valide, puis la regeneration retire les fichiers.
         self.click('[data-goto="4"]')
         self.click("#mcp-github")
+        self.assertTrue(self.js("return document.querySelector('#download').disabled"))
         self.click('[data-goto="5"]')
+        self.click("#validate-files")
+        self.wait("return document.querySelector('#status').textContent.includes('relancer la verification')")
         self.click("#check")
-        self.wait("return !document.querySelector('#download').disabled")
-        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
+        self.wait("return !document.querySelector('#preview').hidden && !document.querySelector('[data-path=\"docs/MCP.md\"]')")
+        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.dataset.path)")
         self.assertFalse({".mcp.json", "docs/MCP.md"} & set(files))
+
+    def capture_archive(self):
+        """Clique sur Telecharger et relit le ZIP recu, sans laisser Firefox l'ecrire sur disque."""
+        self.js("""window.__zip = null;
+            HTMLAnchorElement.prototype.click = function () {};
+            const original = window.fetch;
+            window.fetch = async (path, init) => {
+              const response = await original(path, init);
+              if (path === '/api/archive') {
+                const bytes = new Uint8Array(await response.clone().arrayBuffer());
+                let text = ''; for (const b of bytes) text += String.fromCharCode(b);
+                window.__zip = btoa(text);
+              }
+              return response;
+            };""")
+        self.click("#download")
+        self.wait("return window.__zip !== null && document.querySelector('#status').textContent === 'Archive generee.'")
+        return zipfile.ZipFile(io.BytesIO(base64.b64decode(self.js("return window.__zip"))))
+
+    def test_editor_and_skill_approval_interact(self):
+        """Une approbation retiree apres validation de l'apercu oblige a regenerer."""
+        type(self).skill_client = FakeGh()
+        self.type_text("#name", "skills-edit")
+        self.js("const s=document.querySelector('#project_type'); s.value='web'; s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.click('[data-goto="1"]')
+        for css in ("#tech-node", "#tech-typescript", "#tech-react", "#tech-vitest"):
+            self.click(css)
+        self.click('[data-goto="2"]')
+        self.click('input[name="agent"][value="claude"]')
+        self.click('[data-goto="4"]')
+        self.click("#skills-search")
+        self.wait("return document.querySelector('[data-skill=\"webapp-testing\"]') !== null")
+        self.click('[data-skill="webapp-testing"] [data-action="approve"]')
+        self.click('[data-goto="5"]')
+        self.click("#net-skills")
+        self.click("#check")
+        self.wait("return !document.querySelector('#preview').hidden")
+        path = ".claude/skills/webapp-testing/SKILL.md"
+        self.click('[data-path="%s"]' % path)
+        self.js("const e=document.querySelector('#content'); e.value += '\\nNote locale.\\n'; e.dispatchEvent(new Event('input',{bubbles:true}))")
+        self.assertFalse(self.js("return document.querySelector('[data-modified=\"%s\"]').hidden" % path))
+        self.click("#validate-files")
+        self.wait("return !document.querySelector('#download').disabled")
+        archive = self.capture_archive()
+        self.assertTrue(archive.read("skills-edit/" + path).decode().endswith("Note locale.\n"))
+        self.assertFalse([n for n in archive.namelist() if "/skills/" in n and n.endswith(".py")])
+        self.click('[data-goto="4"]')
+        self.click('#skills-approved button')
+        self.assertTrue(self.js("return document.querySelector('#download').disabled"))
 
 
 if __name__ == "__main__":

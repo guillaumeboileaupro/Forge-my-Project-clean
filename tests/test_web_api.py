@@ -129,6 +129,73 @@ class ApiServerTests(unittest.TestCase):
         self.assertEqual(status, 422)
         self.assertFalse(json.loads(body)["ok"])
 
+    def test_edited_preview_is_validated_and_archived(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        files["README.md"] = "# Contenu relu et modifie\n"
+
+        status, _, body = self.post("/api/files/validate", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["modified"], ["README.md"])
+
+        status, _, archive_body = self.post("/api/archive", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(archive_body)) as archive:
+            self.assertEqual(archive.read("stock-api/README.md"), b"# Contenu relu et modifie\n")
+
+    def test_edited_preview_rejects_path_and_file_set_changes(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        invalid = [
+            {path: content for path, content in files.items() if path != "README.md"},
+            dict(files, **{"extra.txt": "interdit"}),
+            dict(files, **{"../escape": "interdit"}),
+        ]
+        for edited in invalid:
+            with self.subTest(paths=edited.keys()):
+                status, _, body = self.post("/api/files/validate", {"config": CONFIG, "files": edited})
+                self.assertEqual(status, 400)
+                self.assertFalse(json.loads(body)["ok"])
+
+    def test_archive_revalidates_edited_file_set(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        files.pop("README.md")
+        status, _, body = self.post("/api/archive", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 400)
+        self.assertFalse(json.loads(body)["ok"])
+
+    def test_preview_routes_never_write_to_disk(self):
+        """Apercu, validation et archive restent en memoire : toute ouverture en ecriture echoue."""
+        import builtins
+        import os as os_module
+        real_open, real_os_open = builtins.open, os_module.open
+        writes = []
+
+        def guarded_open(file, mode="r", *args, **kwargs):
+            if any(flag in mode for flag in "wax+"):
+                writes.append(file)
+                raise AssertionError("ecriture interdite: %s" % file)
+            return real_open(file, mode, *args, **kwargs)
+
+        def guarded_os_open(path, flags, *args, **kwargs):
+            if flags & (os_module.O_WRONLY | os_module.O_RDWR | os_module.O_CREAT):
+                writes.append(path)
+                raise AssertionError("ecriture interdite: %s" % path)
+            return real_os_open(path, flags, *args, **kwargs)
+
+        config = dict(CONFIG, mcp_servers=["github"])
+        with mock.patch("builtins.open", guarded_open), mock.patch("os.open", guarded_os_open):
+            status, body = web.plan_payload(json.dumps({"config": config}))[:2]
+            files = json.loads(body)["contents"]
+            files["AGENTS.md"] += "\nEdition.\n"
+            request = json.dumps({"config": config, "files": files})
+            validated = web.preview_validate_payload(request)
+            archived = web.archive_payload(request)
+        self.assertEqual((status, validated[0], archived[0]), (200, 200, 200))
+        self.assertEqual(writes, [])
+
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))
         with mock.patch("forge.pipeline.verify_plan", return_value=failing):

@@ -130,5 +130,60 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(status, 422)
 
 
+    # --- Interactions T10 / T15 / T16 : apercu edite, skills approuves, MCP ---
+    def edited_request(self):
+        approval = self.approval("webapp-testing")
+        config = dict(CONFIG, agents=["claude", "codex"], external_skills=[approval], mcp_servers=["github", "playwright"])
+        request = {"config": config, "skills": True}
+        status, data = self.post_json("/api/plan", request)
+        self.assertEqual(status, 200, data)
+        files = data["contents"]
+        for path in (".claude/skills/webapp-testing/SKILL.md", ".mcp.json", ".codex/config.toml", "docs/MCP.md"):
+            self.assertIn(path, files)
+        return request, files
+
+    def test_edited_preview_keeps_approved_skill_and_mcp_in_archive(self):
+        import io
+        import zipfile
+        request, files = self.edited_request()
+        generated_mcp = files[".mcp.json"]
+        files["AGENTS.md"] += "\nRelu dans l'editeur.\n"
+        files[".claude/skills/webapp-testing/SKILL.md"] += "\nNote locale.\n"
+        status, data = self.post_json("/api/files/validate", dict(request, files=files))
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["modified"], [".claude/skills/webapp-testing/SKILL.md", "AGENTS.md"])
+        status, body = self.post("/api/archive", dict(request, files=files))
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(body)) as archive:
+            read = lambda path: archive.read("shop-web/" + path).decode("utf-8")
+            self.assertTrue(read("AGENTS.md").endswith("Relu dans l'editeur.\n"))
+            self.assertTrue(read(".claude/skills/webapp-testing/SKILL.md").endswith("Note locale.\n"))
+            self.assertEqual(read(".mcp.json"), generated_mcp)
+            self.assertFalse([n for n in archive.namelist() if "skills/" in n and n.endswith(".py")])
+
+    def test_edits_do_not_outlive_a_changed_skill_or_mcp_selection(self):
+        request, files = self.edited_request()
+        config = request["config"]
+        for changed in (dict(config, mcp_servers=[]), dict(config, external_skills=[]),
+                        dict(config, agents=["claude"])):
+            with self.subTest(changed=changed):
+                status, data = self.post_json("/api/archive", dict(request, config=changed, files=files))
+                self.assertEqual(status, 400)
+                self.assertIn("inattendus", data["error"])
+        self.client = FakeClient(repos=modified_repos("skills/webapp-testing/SKILL.md", "change"))
+        status, data = self.post_json("/api/archive", dict(request, files=files))
+        self.assertEqual(status, 422)
+        self.assertIn("skill-modified", [x["code"] for x in data["diagnostics"]])
+
+    def test_editor_cannot_inject_unselected_skill_or_mcp_file(self):
+        status, data = self.post_json("/api/plan", {"config": CONFIG})
+        files = data["contents"]
+        for extra in (".mcp.json", ".codex/config.toml", ".claude/skills/evil/SKILL.md"):
+            with self.subTest(extra=extra):
+                status, data = self.post_json("/api/files/validate", {"config": CONFIG, "files": dict(files, **{extra: "{}"})})
+                self.assertEqual(status, 400)
+                status, data = self.post_json("/api/archive", {"config": CONFIG, "files": dict(files, **{extra: "{}"})})
+                self.assertEqual(status, 400)
+
 if __name__ == "__main__":
     unittest.main()

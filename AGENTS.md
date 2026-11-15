@@ -10,6 +10,7 @@ Construire un generateur interactif, fiable et extensible qui produit des squele
 - Tests: tests/ (unitaires, API HTTP, recette Firefox headless activee par FORGE_E2E=1).
 - Aucun package tiers requis pour le generateur.
 - Moteur technique: forge/ (catalogs/, templates/), contrat dans docs/ENGINE.md; verification des registres uniquement sur demande explicite; formulaire hybride sur / (ui/index.html), formulaire historique sur /legacy. Aucun MCP n'est configure pour ce depot ; les projets generes recoivent une configuration MCP uniquement sur selection explicite (catalogs/mcp, T15).
+- Apercu T16: `forge/filesystem/preview.py` revalide l'ensemble exact des fichiers edites avant archive; l'interface marque les modifications et n'ecrit encore aucun fichier local.
 - Formulaire historique (/legacy, generator.py): son pipeline est un modele volontairement bloquant. Le moteur (/) genere une CI operationnelle (.github/workflows/ci.yml), executee pour chaque profil predefini par le job `generated-projects` de ce depot.
 
 ## Architecture

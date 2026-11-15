@@ -11,7 +11,9 @@ Statut: contrats de transition etablis par T02. Ils preservent le prototype T01 
 ## Interface utilisateur -> serveur
 - `GET /` retourne le formulaire hybride `ui/index.html` (moteur `forge/`); `GET /legacy` retourne le formulaire historique `ui/legacy.html`. Seuls les assets connus sont servis: `/css/app.css`, `/js/app.js`, `/js/legacy.js`.
 - `GET /api/catalog` retourne categories, technologies, agents, types de projet, niveaux de securite, options et serveurs MCP proposes (`mcp_servers` : besoin, pertinence, provenance, licence, execution, variable du jeton, permissions) (lecture seule).
-- `POST /api/plan` et `POST /api/archive` acceptent `{"config": <schema moteur v1>, "verify": bool, "skills": bool}` (1 a 65 536 octets, `Host` et `Origin` loopback). `plan` retourne diagnostics, rapports et contenu des fichiers; `archive` repete tous les controles puis retourne le ZIP, ou 422 avec les diagnostics bloquants. Erreur de schema: 400; erreur imprevue: 500 sans detail. Voir docs/ENGINE.md.
+- `POST /api/plan` accepte `{"config": <schema moteur v1>, "verify": bool, "skills": bool}` (1 a 65 536 octets, `Host` et `Origin` loopback) et retourne diagnostics, rapports et contenu des fichiers.
+- `POST /api/files/validate` accepte en plus `"files": {<chemin>: <texte>}` (2 500 000 octets de requete maximum). Le serveur regenere le plan et exige exactement les memes chemins, des textes UTF-8 sans NUL, 256 Kio maximum par fichier et 2 Mio au total. Il retourne la liste des chemins modifies; aucune ecriture n'a lieu.
+- `POST /api/archive` accepte le meme champ `files` optionnel et repete generation, controles et validation des editions avant de retourner le ZIP. Diagnostic bloquant: 422; edition ou schema invalide: 400; erreur imprevue: 500 sans detail. Voir docs/ENGINE.md.
 - `POST /api/answers/validate` accepte `{"document": <export JSON ou reponses>}` et retourne les reponses normalisees ou 400 avec un message lisible. Reponses partielles admises (brouillon), mais tout champ inconnu, type invalide, technologie hors catalogue, prerequis manquant, conflit ou version non supportee est refuse.
 - `GET /api/profiles` (profils predefinis + personnels, `Host` loopback), `POST /api/profiles`, `PUT /api/profiles/<id>`, `DELETE /api/profiles/<id>` : corps `{"label", "description", "answers"}`; 404 si absent, 400 si invalide ou predefini.
 - `POST /api/skills/search` accepte `{"config": <schema moteur v1>}` et retourne `{"ok", "candidates", "notes"}` ; chaque candidat porte nom, description, provenance, commit, empreinte, fichiers copies/ignores, notes et la valeur `approval` a ajouter a `external_skills`. Acces reseau GitHub explicite ; rien n'est copie ni execute. Configuration invalide : 400/422.
@@ -49,9 +51,10 @@ Statut: contrats de transition etablis par T02. Ils preservent le prototype T01 
 - L'ordre des entrees est stable (`sorted`) pour faciliter les tests et les comparaisons.
 
 ## Ecriture de fichiers
-- Non implementee dans T02. Le telechargement ZIP reste la seule sortie utilisateur.
-- Le futur composant filesystem recevra un plan de fichiers deja valide, proposera apercu/diff, puis exigera une confirmation explicite.
-- Il devra proteger destination, conflits, sauvegarde et rollback; il ne devra pas dependre du transport HTTP ni du moteur de templates.
+- T16 implemente uniquement la preparation en memoire: arbre, edition, indication des changements, restauration du contenu genere et validation par `forge.filesystem.preview.validate_preview`.
+- Interactions T10/T15/T16: les fichiers des skills approuves et des serveurs MCP selectionnes sont editables comme les autres, mais ne peuvent etre ni ajoutes ni retires depuis l'editeur; un skill modifie depuis son approbation bloque l'archive (422) meme avec des editions; toute modification de la configuration ou des approbations desactive le telechargement jusqu'a une nouvelle verification.
+- Le telechargement ZIP reste la seule sortie. L'ensemble des chemins doit etre strictement identique au rendu regenere cote serveur; un ajout, une suppression ou un chemin non sur est refuse.
+- T17 ajoutera comparaison avec une destination, diff, fusion, confirmation, sauvegarde et rollback. Cette ecriture devra rester independante du transport HTTP et du moteur de templates.
 
 ## Points d'entree compatibles
 - `python3 server.py` et `http://127.0.0.1:8765`.

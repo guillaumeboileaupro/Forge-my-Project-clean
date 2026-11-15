@@ -18,13 +18,15 @@ LOCAL_HOST = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$")
 LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$")
 LEGACY_LIMIT = 16384
 API_LIMIT = 65536
+FILES_API_LIMIT = 2500000
 API_POST = {
-    "/api/plan": web.plan_payload,
-    "/api/archive": web.archive_payload,
-    "/api/answers/validate": web.answers_validate_payload,
-    "/api/profiles": web.profile_create_payload,
-    "/api/skills/search": web.skills_search_payload,
-    "/api/skills/verify": web.skills_verify_payload,
+    "/api/plan": (web.plan_payload, API_LIMIT),
+    "/api/archive": (web.archive_payload, FILES_API_LIMIT),
+    "/api/files/validate": (web.preview_validate_payload, FILES_API_LIMIT),
+    "/api/answers/validate": (web.answers_validate_payload, API_LIMIT),
+    "/api/profiles": (web.profile_create_payload, API_LIMIT),
+    "/api/skills/search": (web.skills_search_payload, API_LIMIT),
+    "/api/skills/verify": (web.skills_verify_payload, API_LIMIT),
 }
 PROFILE_PATH = re.compile(r"^/api/profiles/([a-z0-9][a-z0-9-]{0,47})$")
 
@@ -93,8 +95,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path in API_POST:
-            raw = self.read_json_body(API_LIMIT)
-            return None if raw is None else self.safe_reply(API_POST[self.path], raw)
+            handler, limit = API_POST[self.path]
+            raw = self.read_json_body(limit)
+            return None if raw is None else self.safe_reply(handler, raw)
         if self.path != "/generate":
             return self.reply(404, b"Not found")
         raw = self.read_json_body(LEGACY_LIMIT)

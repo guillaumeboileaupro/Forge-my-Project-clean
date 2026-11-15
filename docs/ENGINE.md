@@ -119,5 +119,5 @@ Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une 
 - Pas de lockfile genere (il exige d'executer l'installateur) : la CI generee utilise `npm install` tant que `package-lock.json` n'est pas versionne, puis `npm ci`.
 - Django : pas de squelette `manage.py` genere ; les tests passent par pytest.
 - Le moteur est branche sur le formulaire hybride (`/`, API `/api/*`, voir docs/CONTRACTS.md) ; `generator.py` et `/legacy` restent l'ancien parcours, inchange.
-- L'interface ne propose pas encore l'edition des fichiers avant ecriture (T16) ni l'ecriture locale (T17) : la sortie est un ZIP.
+- L'interface permet d'editer les fichiers en memoire avant l'archive (T16) ; l'ecriture locale reste a faire (T17) : la sortie est un ZIP. Les editions ne sont acceptees que pour l'ensemble exact des chemins regeneres : changer les skills approuves, les serveurs MCP ou les agents oblige a regenerer l'apercu.
 - L'empreinte des skills s'appuie sur les SHA-1 de blobs Git fournis par GitHub (protection anti-collision de GitHub) ; la confiance repose sur l'examen humain du contenu, que l'outil ne remplace pas.

@@ -141,6 +141,9 @@ class GitHookFunctionalTests(unittest.TestCase):
                                            if not (Path(p) / "gitleaks").exists())  # chemin de repli teste
         self.git("init", "-q", "-b", "main")
         self.git("config", "core.hooksPath", ".githooks")
+        # Pas de maintenance Git detachee : elle courrait avec la suppression du dossier (CI instable).
+        self.git("config", "gc.auto", "0")
+        self.git("config", "maintenance.auto", "false")
 
     def git(self, *args, check=True, env=None):
         return subprocess.run(["git", *args], cwd=self.root, env=env or self.env, capture_output=True, text=True, check=check)
