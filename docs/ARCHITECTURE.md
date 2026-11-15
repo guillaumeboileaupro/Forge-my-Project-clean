@@ -3,7 +3,7 @@
 ## Etat actuel
 Prototype en Python standard library: server.py expose le formulaire ui/index.html et ses assets; generator.py conserve la facade publique historique. La validation et la generation historiques sont isolees dans forge/config/legacy.py et forge/generator/legacy.py; leurs textes sont dans templates/legacy/. Le prototype ne satisfait pas encore toutes les specifications. Conserver son fonctionnement pendant la migration et ne pas annoncer les modules cibles comme implementes.
 
-Moteur technique (T06-T11) disponible dans forge/ avec catalogs/ et templates/ : schema d'entree, catalogue et compatibilites, regles, rendu des documents, verification des packages et skills. Il alimente le formulaire hybride servi sur / (API locale /api/catalog, /api/plan, /api/archive dans forge/web.py) ; le formulaire historique reste sur /legacy via generator.py. Profils predefinis dans catalogs/profiles/, profils personnels et reponses partielles geres par forge/config/profiles.py et forge/config/answers.py (T05). Contrat et limites : docs/ENGINE.md et docs/CONTRACTS.md.
+Moteur technique (T06-T11) disponible dans forge/ avec catalogs/ et templates/ : schema d'entree, catalogue et compatibilites, regles, rendu des documents, verification des packages et skills. Il alimente le formulaire hybride servi sur / (API locale /api/catalog, /api/plan, /api/archive dans forge/web.py) ; le formulaire historique reste sur /legacy via generator.py. Profils predefinis dans catalogs/profiles/, profils personnels et reponses partielles geres par forge/config/profiles.py et forge/config/answers.py (T05). T16 ajoute l'explorateur/editeur en memoire et la validation pure dans `forge/filesystem/preview.py`; aucune ecriture locale n'est encore exposee. Contrat et limites : docs/ENGINE.md et docs/CONTRACTS.md.
 
 ## Flux cible
 ```text
@@ -76,7 +76,7 @@ Les signatures, formats et responsabilites applicables sont definis dans [CONTRA
 ## Mise en place progressive
 - Operationnel apres T02: ui/, forge/config/legacy.py, forge/generator/legacy.py et templates/legacy/.
 - Reserve aux taches T06-T11 de Claude: forge/rules/, forge/planner/, catalogues, moteur de rendu moderne, skills et verification des dependances. T02 ne cree pas de coquilles vides pour ces composants.
-- Reserve aux taches ulterieures: forge/security/ et forge/filesystem/ au-dela des controles minimaux deja presents. Les dossiers seront crees avec leur premiere responsabilite concrete.
+- Operationnel apres T16: `forge/filesystem/preview.py` valide les chemins, l'ensemble exact et la taille des contenus edites, sans lire ni ecrire la destination. La comparaison, la sauvegarde et l'ecriture atomique restent reservees a T17.
 - La bibliotheque templates/legacy preserve strictement les sorties actuelles. Les futurs templates structures peuvent coexister puis remplacer la facade par migration testee.
 
 ## Frontieres de securite

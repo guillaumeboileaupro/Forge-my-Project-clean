@@ -16,6 +16,7 @@ from forge.config.spec import AGENTS, OPTIONS, PROJECT_TYPES, SECURITY_LEVELS, S
 from forge.diagnostics import ForgeError
 from forge.generator.archive import build_zip
 from forge.generator.context import AGENT_INFO, PROJECT_TYPE_LABELS
+from forge.filesystem.preview import validate_preview
 from forge.pipeline import run
 from forge.planner.plan import build_plan
 from forge.skills import service as skill_service
@@ -49,22 +50,23 @@ def catalog_payload():
     })
 
 
-def _parse_request(raw):
+def _parse_request(raw, allow_files=False):
     try:
         body = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SpecError("JSON invalide") from exc
-    if not isinstance(body, dict) or set(body) - REQUEST_FIELDS or "config" not in body:
-        raise SpecError("Requete invalide : champs config, verify, skills")
+    allowed = REQUEST_FIELDS | ({"files"} if allow_files else set())
+    if not isinstance(body, dict) or set(body) - allowed or "config" not in body:
+        raise SpecError("Requete invalide : champs config, verify, skills" + (", files" if allow_files else ""))
     verify, skills = body.get("verify", False), body.get("skills", False)
     if not isinstance(verify, bool) or not isinstance(skills, bool):
         raise SpecError("verify et skills doivent etre booleens")
-    return body["config"], verify, skills
+    return body["config"], verify, skills, body.get("files")
 
 
-def _execute(raw):
-    config, verify, skills = _parse_request(raw)
-    return run(config, verify=verify, skills=skills)
+def _execute(raw, allow_files=False):
+    config, verify, skills, files = _parse_request(raw, allow_files=allow_files)
+    return run(config, verify=verify, skills=skills), files
 
 
 def _failure(exc):
@@ -76,7 +78,7 @@ def _failure(exc):
 def plan_payload(raw):
     """Apercu : diagnostics, rapports et contenu des fichiers (aucune ecriture)."""
     try:
-        result = _execute(raw)
+        result, _ = _execute(raw)
     except (ForgeError, ValueError) as exc:
         return _failure(exc)
     payload = result.as_dict()
@@ -87,14 +89,28 @@ def plan_payload(raw):
 def archive_payload(raw):
     """Repete tous les controles avant de produire l'archive ; refuse toute erreur."""
     try:
-        result = _execute(raw)
+        result, edited = _execute(raw, allow_files=True)
         if d.has_errors(result.diagnostics):
             raise ForgeError("Erreurs bloquantes", [x for x in result.diagnostics if x.severity is d.Severity.ERROR])
+        files = result.files if edited is None else validate_preview(edited, result.files)
         name = result.plan.spec.name
-        content = build_zip(name, result.files)
+        content = build_zip(name, files)
     except (ForgeError, ValueError) as exc:
         return _failure(exc)
     return 200, content, "application/zip", name + ".zip"
+
+
+def preview_validate_payload(raw):
+    """Regenere le plan puis valide l'ensemble exact des textes edites."""
+    try:
+        result, edited = _execute(raw, allow_files=True)
+        if edited is None:
+            raise ValueError("Le champ files est requis pour valider l'apercu")
+        files = validate_preview(edited, result.files)
+    except (ForgeError, ValueError) as exc:
+        return _failure(exc)
+    changed = sorted(path for path, content in files.items() if content != result.files[path])
+    return _json(200, {"ok": True, "files": sorted(files), "modified": changed})
 
 
 # --- Reponses (brouillon, import) et profils (T05) ---------------------------

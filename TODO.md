@@ -32,7 +32,7 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T13 | P5 | Controles securite stricts et rapports | T11,T12 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Scans applicables et blocage fiable |
 | T14 | P5 | Hooks Git et agents suivant leurs capacites | T07 | 1 j | 0 h 11 | -7 h 49 (base 8 h/j) | DONE | Hooks activables et executes |
 | T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | - | - | TODO | Aucun MCP fictif ni secret |
-| T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | - | - | TODO | Modifications visibles avant ecriture |
+| T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | 0 h 06 | -15 h 54 (base 8 h/j) | DONE | Modifications visibles avant ecriture |
 | T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | - | - | TODO | Conflits et rollback testes |
 | T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | - | - | TODO | Critères de finalisation valides |
 | **Total** | | | | **30 j** | **-** | **-** | | |
@@ -116,4 +116,12 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Verification reelle (GitHub, `gh` et HTTPS anonyme): 8 candidats pour un projet web React; copie de `webapp-testing` avec controle des blobs OK, scripts `examples/*.py` ignores; empreinte falsifiee = FAIL.
 - Defaut corrige: la barre laterale fixe depassait la hauteur de fenetre (bouton Reinitialiser inaccessible); elle defile desormais.
 - Limites: refus conserves uniquement pendant la session; l'empreinte repose sur les SHA-1 de blobs Git fournis par GitHub; la recherche de code GitHub exige la CLI gh authentifiee; la decision de confiance reste humaine.
+
+### T16 - 15 novembre 2026 (Codex)
+- Temps reel mesure: 0 h 06, de la creation du worktree a la premiere recette Firefox complete verte.
+- Interface: explorateur hierarchique, navigation precedent/suivant, apercu editable, marqueur par fichier, compteur global et restauration du contenu genere.
+- Validation: `POST /api/files/validate` regenere le plan et exige l'ensemble exact des chemins; l'archive repete ce controle et contient les editions validees.
+- Securite: ajout/suppression/traversee de chemin, texte non UTF-8 ou avec NUL, fichier > 256 Kio et ensemble > 2 Mio refuses; aucune ecriture locale dans T16.
+- Tests locaux: 187 PASS, 7 ignores dans la suite standard; compilation Python et `node --check` PASS; recette Firefox headless 6/6 PASS.
+- T17 reste a faire: destination, diff, fusion, sauvegarde, confirmation, ecriture et rollback.
 

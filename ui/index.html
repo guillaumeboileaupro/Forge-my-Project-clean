@@ -118,8 +118,25 @@
         <button type="button" id="check" class="primary">Verifier la configuration</button>
         <div id="report" aria-live="polite"></div>
         <div class="preview" id="preview" hidden>
-          <ul id="files" class="files" aria-label="Fichiers prevus"></ul>
-          <pre id="content" tabindex="0" aria-label="Contenu du fichier selectionne"></pre>
+          <aside class="file-explorer" aria-labelledby="h-files">
+            <h3 id="h-files">Fichiers generes</h3>
+            <ul id="files" class="files tree" aria-label="Arborescence des fichiers generes"></ul>
+          </aside>
+          <section class="file-editor" aria-labelledby="file-title">
+            <div class="editor-heading">
+              <h3 id="file-title">Selectionner un fichier</h3>
+              <span id="edit-status" class="tag" aria-live="polite">Non modifie</span>
+            </div>
+            <label for="content" class="visually-hidden">Contenu du fichier selectionne</label>
+            <textarea id="content" rows="22" spellcheck="false" aria-describedby="editor-help" disabled></textarea>
+            <p id="editor-help" class="help">Les changements restent dans cet apercu jusqu'a la validation. Aucun fichier local n'est ecrit.</p>
+            <div class="row editor-actions">
+              <button type="button" id="previous-file">Fichier precedent</button>
+              <button type="button" id="next-file">Fichier suivant</button>
+              <button type="button" id="revert-file" disabled>Retablir ce fichier</button>
+              <button type="button" id="validate-files" class="primary" disabled>Valider les modifications</button>
+            </div>
+          </section>
         </div>
         <button type="button" id="download" class="primary" disabled>Telecharger l'archive ZIP</button>
       </section>

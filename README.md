@@ -10,7 +10,7 @@ Python 3.11+ uniquement, sans dependances externes.
 python3 server.py
 ```
 
-Ouvrir http://127.0.0.1:8765 dans Firefox : formulaire par sections (projet, technologies, agents, securite, skills externes, verification), apercu des fichiers generes puis telechargement de l'archive ZIP. Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
+Ouvrir http://127.0.0.1:8765 dans Firefox : formulaire par sections (projet, technologies, agents, securite, skills externes, verification), explorateur des fichiers generes, edition et validation des contenus, puis telechargement de l'archive ZIP. Les fichiers modifies sont signales et peuvent etre retablis avant validation. Cette etape reste un apercu en memoire : aucune ecriture dans un dossier local n'est realisee par T16. Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
 
 Les reponses sont sauvegardees automatiquement dans le navigateur et restaurees a la reouverture. Des profils predefinis (Python API/CLI/bibliotheque/Django, TypeScript React/Express) et des profils personnels (stockes dans `~/.config/forge-my-project/profiles.json`) se chargent dans le questionnaire; les reponses s'exportent et s'importent en JSON valide par le serveur.
 

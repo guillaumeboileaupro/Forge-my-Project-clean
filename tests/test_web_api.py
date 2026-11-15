@@ -113,6 +113,43 @@ class ApiServerTests(unittest.TestCase):
         self.assertEqual(status, 422)
         self.assertFalse(json.loads(body)["ok"])
 
+    def test_edited_preview_is_validated_and_archived(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        files["README.md"] = "# Contenu relu et modifie\n"
+
+        status, _, body = self.post("/api/files/validate", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["modified"], ["README.md"])
+
+        status, _, archive_body = self.post("/api/archive", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(archive_body)) as archive:
+            self.assertEqual(archive.read("stock-api/README.md"), b"# Contenu relu et modifie\n")
+
+    def test_edited_preview_rejects_path_and_file_set_changes(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        invalid = [
+            {path: content for path, content in files.items() if path != "README.md"},
+            dict(files, **{"extra.txt": "interdit"}),
+            dict(files, **{"../escape": "interdit"}),
+        ]
+        for edited in invalid:
+            with self.subTest(paths=edited.keys()):
+                status, _, body = self.post("/api/files/validate", {"config": CONFIG, "files": edited})
+                self.assertEqual(status, 400)
+                self.assertFalse(json.loads(body)["ok"])
+
+    def test_archive_revalidates_edited_file_set(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        files = json.loads(body)["contents"]
+        files.pop("README.md")
+        status, _, body = self.post("/api/archive", {"config": CONFIG, "files": files})
+        self.assertEqual(status, 400)
+        self.assertFalse(json.loads(body)["ok"])
+
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))
         with mock.patch("forge.pipeline.verify_plan", return_value=failing):
