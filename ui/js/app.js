@@ -245,8 +245,23 @@ function filesRequestBody() {
   return JSON.stringify(request);
 }
 
+// Requetes sans effet de bord : relancees une fois si le navigateur interrompt la connexion
+// pendant une operation longue (recherche GitHub, verification en ligne). Les ecritures ne le sont jamais.
+const RETRYABLE = new Set(['/api/plan', '/api/skills/search', '/api/skills/verify', '/api/files/validate',
+  '/api/write/compare', '/api/destination/browse', '/api/answers/validate', '/api/archive']);
+
 async function post(path, body) {
-  return fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body});
+  const send = () => fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body});
+  try {
+    return await send();
+  } catch (error) {
+    if (!RETRYABLE.has(path)) throw error;
+    try {
+      return await send();
+    } catch (retryError) {
+      throw new Error(`connexion au serveur local impossible ou interrompue (${retryError.message}) : verifier que server.py tourne, puis relancer l'action`);
+    }
+  }
 }
 
 function renderReport(payload) {

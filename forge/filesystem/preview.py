@@ -11,6 +11,10 @@ class PreviewError(ValueError):
     """Modification de fichier invalide ou incoherente avec le plan rendu."""
 
 
+class FileSetMismatch(PreviewError):
+    """Les chemins recus different du rendu regenere (edition hors liste ou rendu different)."""
+
+
 def validate_preview(files, generated):
     """Valide une copie complete des textes affiches dans l'editeur (chemins, tailles, contenu)."""
     if not isinstance(files, dict):
@@ -25,7 +29,7 @@ def validate_preview(files, generated):
             details.append("absents: " + ", ".join(missing))
         if extra:
             details.append("inattendus: " + ", ".join(extra))
-        raise PreviewError("Liste de fichiers incoherente (" + "; ".join(details) + ")")
+        raise FileSetMismatch("Liste de fichiers incoherente (" + "; ".join(details) + ")")
 
     validated = {}
     total = 0

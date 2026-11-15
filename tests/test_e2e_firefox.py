@@ -546,5 +546,20 @@ class FirefoxFormTests(unittest.TestCase):
         self.validate_files()
         self.wait("return !document.querySelector('#download').disabled")
 
+    def test_interrupted_read_only_request_is_retried_once_but_writes_never(self):
+        """T18 : une connexion interrompue par le navigateur est relancee une fois pour une lecture seule."""
+        self.cmd("POST", "/timeouts", {"script": 30000})
+        script = """const done = arguments[0]; const real = window.fetch; let calls = 0;
+            window.fetch = (...args) => { calls += 1; if (calls === 1) return Promise.reject(new TypeError('NetworkError')); return real(...args); };
+            post('/api/destination/browse', '{}').then(r => done('ok ' + r.status + ' ' + calls))
+              .catch(e => done('echec ' + e.message + ' ' + calls))
+              .finally(() => { window.fetch = real; });"""
+        self.assertEqual(self.cmd("POST", "/execute/async", {"script": script, "args": []}), "ok 200 2")
+        script = """const done = arguments[0]; const real = window.fetch; let calls = 0;
+            window.fetch = () => { calls += 1; return Promise.reject(new TypeError('NetworkError')); };
+            post('/api/write/apply', '{}').then(() => done('envoye')).catch(e => done('refuse ' + calls))
+              .finally(() => { window.fetch = real; });"""
+        self.assertEqual(self.cmd("POST", "/execute/async", {"script": script, "args": []}), "refuse 1")
+
 if __name__ == "__main__":
     unittest.main()

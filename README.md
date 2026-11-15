@@ -1,6 +1,6 @@
 # Forge-my-Project
 
-Generateur interactif de projets GitHub - version initiale.
+Outil local qui prepare l'environnement de developpement d'un nouveau projet (AGENTS.md, skills, documentation, hooks, CI, securite, MCP optionnels) a partir d'un questionnaire dans Firefox. Sans IA embarquee, sans code metier, sans creation ni push de depot.
 
 ## Demarrage
 
@@ -37,7 +37,13 @@ Voir docs/ENGINE.md.
 
 ## Portee de cette version
 
-Genere un AGENTS.md, des skills, de la documentation d'architecture, des regles de securite et un squelette de CI en fonction du langage, de l'agent et du deploiement. Les serveurs MCP ne sont configures que sur selection explicite (catalogue verifie, permissions minimales, aucun secret) et ne sont ni installes ni demarres par l'outil. Ne garantit pas qu'un projet genere est exempt de vulnerabilites.
+Genere un AGENTS.md detaille, des skills, la documentation (architecture, plan, TODO, securite, tests, dependances, ADR, contribution avec la commande de protection de branche), des hooks Git et d'agents et une CI GitHub Actions operationnelle (executee pour les six profils predefinis par la CI de ce depot), selon les technologies, les agents et les options choisis. Les serveurs MCP ne sont configures que sur selection explicite (catalogue verifie, permissions minimales, aucun secret) et ne sont ni installes ni demarres par l'outil. Ne garantit pas qu'un projet genere est exempt de vulnerabilites.
+
+## Plateformes et configuration
+
+- Linux : teste (unitaires, integration, recette Firefox headless, recette finale T18). macOS : non teste ; l'ecriture locale repose sur des API POSIX disponibles (dir_fd, O_NOFOLLOW). Windows : non teste ; l'ecriture locale y est refusee, le ZIP reste disponible.
+- `FORGE_WRITE_ROOT` : racine autorisee pour l'ecriture locale (defaut : dossier personnel). `FORGE_PROFILES_FILE` ou `XDG_CONFIG_HOME` : emplacement des profils personnels.
+- Exigences, preuves et recette : docs/TRACEABILITY.md et docs/ACCEPTANCE.md.
 
 ## Regles
 

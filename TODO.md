@@ -34,8 +34,8 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | 0 h 12 | -7 h 48 (base 8 h/j) | DONE | Aucun MCP fictif ni secret |
 | T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | 0 h 15 | -15 h 45 (base 8 h/j) | DONE | Modifications visibles avant ecriture |
 | T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Conflits et rollback testes |
-| T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | - | - | TODO | Critères de finalisation valides |
-| **Total** | | | | **30 j** | **-** | **-** | | |
+| T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | 1 h 36 | -22 h 24 (base 8 h/j) | DONE | Critères de finalisation valides |
+| **Total** | | | | **30 j** | **3 h 57** | **-236 h 03** (base 8 h/j) | | 18 taches DONE |
 
 ## Ordre de travail
 Commencer par T01. Une seule PR ouverte et un seul agent de developpement a la fois. Actualiser les colonnes Reel/Ecart apres chaque tache et noter les preuves CI dans la PR.
@@ -164,4 +164,12 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Dependances, incompatibilites et cascades: retrait en cascade des prerequis (Firefox), conflits uni/bidirectionnels et prerequis manquants (test_engine_catalog), brouillon/profil incompatible refuse (test_profiles, Firefox), MCP non pertinent retire au changement de type (Firefox test_mcp_selection), editions perimees apres changement de selection (test_skills_api).
 - Tests: 234 tests unitaires OK (11 ignores: 10 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil); recette Firefox 10/10 dont `test_questionnaire_search_suggestion_and_warning_confirmation`.
 - Restent PARTIEL (voir matrice): U9 fusion manuelle sans trois voies, S7 pas de harnais E2E genere, W2 protection de branche a executer par le proprietaire du depot.
+
+### T18 - 15 novembre 2026 (Claude Code)
+- Temps reel: 14 h 25 -> 16 h 01 (1 h 36), de la fin de T03/T04 a la recette sur clone propre verte et au rapport; CI et fusion notees dans la PR.
+- Recette sur installation propre (clone neuf, HOME vierge, reseau reel): 26/26 PASS (`tests/acceptance_t18.py`), dont skills GitHub reels, verification en ligne, ecriture avec fusion, sauvegarde et restauration manuelle, CI du projet ecrit et 10 refus.
+- Tests: 236 unitaires OK (12 ignores sans FORGE_E2E ou gitleaks); Firefox 11/11; six profils `smoke_generated.py --verify` 6/6; `smoke_security.py` detections bloquantes; Gitleaks historique complet sans fuite; Bandit 0 medium/high; MCP Playwright genere demarre (25 outils).
+- Anomalies corrigees: requete longue interrompue par Firefox headless (relance unique des lectures, jamais des ecritures); refus opaque quand une source en ligne change entre verification et validation; documentation perimee (README, AGENTS, LOCAL_WRITE).
+- NON VERIFIE: macOS et Windows (aucun environnement), execution du MCP GitHub distant (gh 2.4.0 sans `auth token`).
+- Rapport: docs/ACCEPTANCE.md; gates G01-G12 cochees dans docs/FINALIZATION_PLAN.md.
 
