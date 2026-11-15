@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "mcp-codex",
+  "description": "Configuration MCP de projet .codex/config.toml (Codex, projets approuves).",
+  "priority": 41,
+  "when": {"options": {"mcp": true}, "agents_any": ["codex"]},
+  "files": [{"path": ".codex/config.toml", "template": "mcp/codex-config.toml.tmpl"}]
+}

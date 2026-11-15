@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "mcp-shared",
+  "description": "Configuration MCP de projet .mcp.json (Claude Code, GitHub Copilot dans VS Code).",
+  "priority": 41,
+  "when": {"options": {"mcp": true}, "agents_any": ["claude", "copilot"]},
+  "files": [{"path": ".mcp.json", "template": "mcp/mcp.json.tmpl"}]
+}

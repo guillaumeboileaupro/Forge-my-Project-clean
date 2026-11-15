@@ -17,7 +17,7 @@ PROJECT_TYPES = ("library", "cli", "api", "web")
 OPTIONS = {"mcp": False}
 FIELDS = {
     "schema_version", "name", "description", "project_type", "architecture", "technologies",
-    "versions", "agents", "security", "options", "external_skills",
+    "versions", "agents", "security", "options", "external_skills", "mcp_servers",
 }
 REPOSITORY = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
@@ -26,6 +26,7 @@ APPROVAL_FIELDS = ("repository", "commit", "path", "name", "digest")
 SKILL_PATH = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 MAX_EXTERNAL_SKILLS = 20
 MAX_TECHNOLOGIES = 30
+MAX_MCP_SERVERS = 10
 
 
 class SpecError(ValueError):
@@ -44,6 +45,7 @@ class ProjectSpec:
     versions: dict = field(default_factory=dict)
     options: dict = field(default_factory=lambda: dict(OPTIONS))
     external_skills: tuple = ()  # approbations explicites : (depot, commit, chemin de base, nom, empreinte)
+    mcp_servers: tuple = ()  # serveurs MCP choisis explicitement (identifiants du catalogue catalogs/mcp)
 
     @property
     def package_name(self):
@@ -128,6 +130,19 @@ def _external_skills(data):
     return tuple(approvals)
 
 
+def mcp_selection(data):
+    """Serveurs MCP choisis ; `options.mcp` est derive de cette selection.
+
+    Compatibilite : un ancien `options.mcp` a true sans serveur choisi est refuse
+    avec un message explicite (aucun MCP n'est genere sans selection).
+    """
+    servers = _unique_ids(data, "mcp_servers", TECH_ID, MAX_MCP_SERVERS)
+    options = _options(data)
+    if options["mcp"] and not servers:
+        raise SpecError("options.mcp : selectionner explicitement les serveurs MCP (mcp_servers)")
+    return servers, dict(options, mcp=bool(servers))
+
+
 def parse_approvals(value):
     """Valide une liste d'approbations seule (import, verification en ligne)."""
     return _external_skills({"external_skills": value})
@@ -160,6 +175,7 @@ def parse_spec(data):
         security=_choice(data, "security", SECURITY_LEVELS, "strict"),
         architecture=_text(data, "architecture", 4000),
         versions=_versions(data),
-        options=_options(data),
+        options=mcp_selection(data)[1],
         external_skills=_external_skills(data),
+        mcp_servers=mcp_selection(data)[0],
     )

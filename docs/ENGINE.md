@@ -38,7 +38,8 @@ python -m forge skills-search spec.json
 | agents | liste | codex, claude, copilot (au moins un) |
 | security | choix | strict (defaut), hardened |
 | architecture | texte | 4000 caracteres max ; prioritaire sur la suggestion |
-| options | objet | `{"mcp": false}` |
+| options | objet | `{"mcp": bool}` derive de `mcp_servers` (true sans serveur choisi = refuse) |
+| mcp_servers | liste | identifiants de `catalogs/mcp/servers.json`, pertinents pour le type de projet (10 au plus) ; vide = aucun fichier MCP |
 | external_skills | liste | approbations `{repository, commit (SHA complet), path, name, digest (sha256:...)}` ; un nom de skill au plus une fois |
 
 Les textes libres sont des donnees : jamais reinterpretes comme modele ni commande.
@@ -49,6 +50,7 @@ Les textes libres sont des donnees : jamais reinterpretes comme modele ni comman
 - `catalogs/rules/` : regles declaratives. `base` est obligatoire ; les autres s'appliquent selon `when` (`technologies_all/any`, `agents_any`, `project_types`, `security`, `options`). Elles ajoutent des fichiers (template -> chemin), des phrases par section et des skills recommandes. Ordre deterministe (priorite, id) ; deux regles produisant le meme fichier sans `override` = erreur.
 - `templates/` : modeles de documents (`{{ var }}`, `{{#if}}`, `{{#each}}`, `{{else}}`, `{{! commentaire }}`) ; aucune evaluation de code, variable inconnue = erreur.
 - `catalogs/skills/sources.json` : depot my-skills, catalogues externes reconnus, politique de copie.
+- `catalogs/mcp/servers.json` : serveurs MCP proposes (nom du registre MCP officiel, depot, licence, pertinence, transport, permissions) ; valide strictement (HTTPS, aucun en-tete Authorization, commande `npx`/`uvx`, package epingle egal a la version executee).
 
 Ajouter une technologie : une entree JSON dans le bon fichier de categorie, puis `python3 -m unittest discover -s tests`.
 
@@ -66,7 +68,7 @@ Ajouter une technologie : une entree JSON dans le bon fichier de categorie, puis
 
 ## Reseau
 
-Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une liste fermee : pypi.org, registry.npmjs.org, api.osv.dev, endoflife.date, api.github.com, raw.githubusercontent.com (redirections controlees). Pour GitHub, la CLI `gh` authentifiee est reutilisee si presente (le jeton reste gere par gh), sinon acces anonyme aux depots publics.
+Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une liste fermee : pypi.org, registry.npmjs.org, api.osv.dev, endoflife.date, api.github.com, raw.githubusercontent.com, registry.modelcontextprotocol.io (redirections controlees). Pour GitHub, la CLI `gh` authentifiee est reutilisee si presente (le jeton reste gere par gh), sinon acces anonyme aux depots publics.
 
 ## Skills
 
@@ -99,6 +101,14 @@ Uniquement sur demande (`verify`, `skills`, `skills-search`), en HTTPS vers une 
 - Garde-fou PreToolUse commun (`scripts/hooks/agent_guard.py`, Python 3) : refuse `--no-verify`, `commit -n`, push force, modification de `core.hooksPath`, ecriture de `.env` (sauf `.env.example`) et de cles privees ; code 2 + raison sur stderr ; entree illisible refusee.
 - Branchement selon les capacites documentees de chaque agent (verifiees le 14 novembre 2026) : Claude Code `.claude/settings.json` (`PreToolUse`) ; Codex `.codex/hooks.json` (`PreToolUse`, matcher `Bash|apply_patch`, hooks de projet actifs seulement apres revue `/hooks` et projet approuve) ; GitHub Copilot `.github/hooks/forge-guard.json` (`version: 1`, `preToolUse`, Copilot CLI et agent cloud, fichier requis sur la branche par defaut pour l'agent cloud). Aucun autre evenement n'est genere.
 - Preuves : tests fonctionnels sur de vrais depots Git (`tests/test_engine_hooks.py`) et execution des hooks generes avec les outils reels pour chaque profil (`tests/smoke_generated.py`).
+
+## Serveurs MCP optionnels (T15)
+- Aucun fichier MCP sans selection explicite dans `mcp_servers`. Seuls les serveurs pertinents sont proposes (GitHub pour tout projet, le workflow genere reposant sur GitHub ; Playwright pour les projets web) ; un serveur inconnu ou non pertinent est une erreur bloquante.
+- Fichiers generes selon les agents : `.mcp.json` (objet `mcpServers`) pour Claude Code et GitHub Copilot dans VS Code (destination native partagee), `.codex/config.toml` (`[mcp_servers.<id>]`) pour Codex, et `docs/MCP.md` (besoin, provenance, licence, statut, permissions, activation par agent). Formats verifies le 2026-11-15 dans la documentation officielle (code.claude.com, learn.chatgpt.com, code.visualstudio.com).
+- Aucun secret : le jeton GitHub est reference par `${GITHUB_PERSONAL_ACCESS_TOKEN}` (`.mcp.json`) ou `bearer_token_env_var` (Codex). Controle Gitleaks 8.30.1 sur un projet genere avec MCP : aucune fuite.
+- Permissions minimales : GitHub en lecture seule (`X-MCP-Readonly: true`) et limite aux ensembles `repos,issues,pull_requests,actions` ; Playwright epingle (`@playwright/mcp@0.0.85`), profil en memoire (`--isolated`), sans interface (`--headless`), sans acces fichiers hors espace de travail.
+- Verification en ligne (`verify`) : registre MCP officiel (`/v0/servers/<nom>/versions/latest` : actif, depot et transport concordants), npm et OSV pour le package epingle ; FAIL bloque la generation, sans verification le statut reste NON VERIFIE (avertissement `mcp-unverified`). Node.js absent du projet pour Playwright : avertissement `mcp-runtime`.
+- Activation : chaque agent demande une approbation (Claude Code : serveurs de projet en attente jusqu'a approbation ; VS Code : Workspace Trust ; Codex : projet approuve). L'agent cloud Copilot se configure dans les parametres du depot, pas par fichier.
 
 ## Limites connues
 

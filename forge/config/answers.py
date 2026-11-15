@@ -9,6 +9,7 @@ version non supportee. Les donnees ne sont jamais executees ni interpretees.
 import re
 
 from forge.config import spec as s
+from forge.mcp.catalog import load_mcp_catalog
 from forge.rules.compatibility import resolve
 
 FORMAT = "forge-my-project/answers"
@@ -71,14 +72,27 @@ def parse_answers(data, catalog):
             "versions": s._versions(data),
             "agents": [a for a in s.AGENTS if a in agents],
             "security": s._choice(data, "security", s.SECURITY_LEVELS, "strict"),
-            "options": s._options(data),
+            "options": s.mcp_selection(data)[1],
+            "mcp_servers": list(s.mcp_selection(data)[0]),
             "external_skills": [dict(zip(s.APPROVAL_FIELDS, item))
                                 for item in s._external_skills(data)],
         }
     except s.SpecError as exc:
         raise AnswersError(str(exc)) from exc
     _check_compatibility(answers, catalog)
+    _check_mcp(answers)
     return answers
+
+
+def _check_mcp(answers):
+    """Seuls des serveurs du catalogue, pertinents pour le type de projet, sont acceptes."""
+    servers = load_mcp_catalog()
+    for server_id in answers["mcp_servers"]:
+        server = servers.get(server_id)
+        if server is None:
+            raise AnswersError("Serveur MCP inconnu du catalogue : " + server_id)
+        if not server.relevant(answers["project_type"]):
+            raise AnswersError("Serveur MCP %s non pertinent pour ce type de projet" % server.name)
 
 
 def _check_compatibility(answers, catalog):

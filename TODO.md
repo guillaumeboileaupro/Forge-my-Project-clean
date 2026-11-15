@@ -31,7 +31,7 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T12 | P5 | GitHub Actions generees et verifiees | T07,T11 | 2 j | 0 h 16 | -15 h 44 (base 8 h/j) | DONE | Pipelines reels pour stacks supportees |
 | T13 | P5 | Controles securite stricts et rapports | T11,T12 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Scans applicables et blocage fiable |
 | T14 | P5 | Hooks Git et agents suivant leurs capacites | T07 | 1 j | 0 h 11 | -7 h 49 (base 8 h/j) | DONE | Hooks activables et executes |
-| T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | - | - | TODO | Aucun MCP fictif ni secret |
+| T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | 0 h 12 | -7 h 48 (base 8 h/j) | DONE | Aucun MCP fictif ni secret |
 | T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | - | - | TODO | Modifications visibles avant ecriture |
 | T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | - | - | TODO | Conflits et rollback testes |
 | T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | - | - | TODO | Critères de finalisation valides |
@@ -116,4 +116,13 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Verification reelle (GitHub, `gh` et HTTPS anonyme): 8 candidats pour un projet web React; copie de `webapp-testing` avec controle des blobs OK, scripts `examples/*.py` ignores; empreinte falsifiee = FAIL.
 - Defaut corrige: la barre laterale fixe depassait la hauteur de fenetre (bouton Reinitialiser inaccessible); elle defile desormais.
 - Limites: refus conserves uniquement pendant la session; l'empreinte repose sur les SHA-1 de blobs Git fournis par GitHub; la recherche de code GitHub exige la CLI gh authentifiee; la decision de confiance reste humaine.
+
+### T15 - 15 novembre 2026 (Claude Code)
+- Temps reel: 11 h 35 -> 11 h 47 (0 h 12), recherche documentaire pendant la CI de T10 puis branche dediee apres fusion de T10; CI et fusion notees dans la PR.
+- Catalogue `catalogs/mcp/servers.json` verifie a la source: registre MCP officiel (`io.github.github/github-mcp-server` 2.1.0, `io.github.microsoft/playwright-mcp` 0.0.85, statut actif), depots GitHub actifs, licences MIT et Apache-2.0, npm `@playwright/mcp` 0.0.85.
+- Formats d'agents verifies dans la documentation officielle: `.mcp.json` (Claude Code; destination native de Copilot dans VS Code, `${VAR}` dans les en-tetes), `.codex/config.toml` (`bearer_token_env_var`, `http_headers`, projets approuves uniquement).
+- Section « Skills et MCP » du formulaire: serveurs pertinents seulement, aucun coche par defaut, provenance, permissions et variable du jeton affichees; selection retiree si le type de projet la rend non pertinente.
+- Tests: `tests/test_engine_mcp.py` (11: catalogue strict, aucune sortie sans selection, fichiers par agent, JSON/TOML relus, absence de secret, pertinence, registre PASS/FAIL/NON VERIFIE, provenance fausse bloquante), API `test_mcp_servers_are_opt_in_and_revalidated`, recette Firefox `test_mcp_selection`. 193 tests unitaires OK (7 ignores sans FORGE_E2E), recette Firefox 7/7.
+- Verification reelle: registre MCP, npm et OSV PASS pour les deux serveurs; Gitleaks 8.30.1 (empreinte verifiee) sur un projet genere avec MCP: aucune fuite; Bandit: aucune alerte.
+- Limites: deux serveurs au catalogue; l'agent cloud Copilot se configure dans les parametres du depot; le serveur GitHub distant exige un jeton fourni par l'utilisateur; Playwright MCP n'est pas une frontiere de securite (documentation officielle); la phrase Codex sur le chargement reserve aux projets approuves provient de la page MCP (« trusted projects only »).
 

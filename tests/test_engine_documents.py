@@ -28,7 +28,8 @@ SCAFFOLD = {
 }
 HOOKS = {".githooks/pre-commit", ".githooks/commit-msg", ".githooks/pre-push", "scripts/hooks/agent_guard.py"}
 AGENT_HOOK_FILES = {".claude/settings.json", ".codex/hooks.json", ".github/hooks/forge-guard.json"}
-SCAFFOLD = SCAFFOLD | HOOKS | AGENT_HOOK_FILES
+MCP_FILES = {".mcp.json", ".codex/config.toml"}  # uniquement si des serveurs MCP sont choisis
+SCAFFOLD = SCAFFOLD | HOOKS | AGENT_HOOK_FILES | MCP_FILES
 BASE_DOCS = {
     "AGENTS.md", "README.md", "SECURITY.md", "CONTRIBUTING.md", "TODO.md", "docs/ARCHITECTURE.md",
     "docs/DEVELOPMENT_PLAN.md", "docs/TESTING.md", "docs/DEPENDENCIES.md", "docs/adr/0001-choix-techniques.md",
@@ -41,7 +42,7 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertEqual([r.id for r in rules if r.mandatory], ["base"])
 
     def test_every_output_is_safe_documentation_without_business_code(self):
-        for spec in (PYTHON_API, TS_WEB, dict(TS_WEB, options={"mcp": True})):
+        for spec in (PYTHON_API, TS_WEB, dict(TS_WEB, mcp_servers=["github", "playwright"])):
             _, files = generate(spec)
             for path, content in files.items():
                 safe_relative_path(path)
@@ -148,7 +149,7 @@ class TypeScriptWebDocumentsTests(unittest.TestCase):
 
     def test_optional_outputs_require_opt_in(self):
         self.assertNotIn("docs/MCP.md", generate(TS_WEB)[1])
-        self.assertIn("docs/MCP.md", generate(dict(TS_WEB, options={"mcp": True}))[1])
+        self.assertIn("docs/MCP.md", generate(dict(TS_WEB, mcp_servers=["github", "playwright"]))[1])
 
 
 class MissingInformationTests(unittest.TestCase):

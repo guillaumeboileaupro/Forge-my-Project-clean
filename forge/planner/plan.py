@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from forge import diagnostics as d
 from forge.config.catalog import load_catalog
 from forge.config.spec import ProjectSpec, parse_spec
+from forge.mcp.catalog import mcp_diagnostics
 from forge.rules.compatibility import resolve
 from forge.rules.engine import compose, load_rules
 from forge.security.controls import security_diagnostics
@@ -53,6 +54,7 @@ def build_plan(data, catalog=None, rules=None):
     composition = compose(rules, spec, resolution.ids())
     out = list(resolution.diagnostics) + list(composition.diagnostics)
     out.extend(security_diagnostics(plan_probe(spec, resolution)))
+    out.extend(mcp_diagnostics(spec, resolution.ids()))
     if not spec.description:
         out.append(d.warning("description-empty", "Description vide : les documents resteront generiques"))
     architecture = _architecture(spec, composition, out)

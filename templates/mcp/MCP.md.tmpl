@@ -1,0 +1,44 @@
+# Serveurs MCP - {{ project.name }}
+
+Serveurs choisis explicitement dans Forge-my-Project. Aucun autre serveur n'est configure, aucun n'est installe ni demarre par l'outil, et aucun secret n'est ecrit dans le depot.
+
+| Serveur | Besoin | Provenance | Licence | Statut |
+| --- | --- | --- | --- | --- |
+{{#each mcp.servers}}
+| {{ this.name }} | {{ this.need }} | registre MCP officiel `{{ this.registry_name }}`, {{ this.repository }} | {{ this.license }} | {{ this.status }} |
+{{/each}}
+
+Statut : PASS = existence, provenance (registre MCP officiel, depot) et version verifiees en ligne ; NON VERIFIE = verification non effectuee ou impossible ; FAIL = bloquant.
+
+{{#each mcp.servers}}
+## {{ this.name }}
+
+- Pertinence : {{ this.reason }}
+- Transport : {{ this.transport }}
+- Documentation : {{ this.docs }}
+{{#if this.has_token}}
+- Jeton : variable d'environnement `{{ this.token_env }}`, a definir dans votre session (jamais dans un fichier du depot).
+{{/if}}
+- Permissions minimales :
+{{#each this.permissions}}
+  - {{ this }}
+{{/each}}
+
+{{/each}}
+## Activation par agent
+
+{{#if mcp.has_claude}}
+- Claude Code : `.mcp.json`. Les serveurs de projet restent en attente d'approbation : lancer `claude` dans le projet pour les approuver (`/mcp` affiche leur etat).
+{{/if}}
+{{#if mcp.has_copilot}}
+- GitHub Copilot (VS Code) : `.mcp.json` a la racine (destination native partagee). Les serveurs ne demarrent que dans un espace de travail approuve (Workspace Trust). L'agent cloud Copilot se configure dans les parametres du depot GitHub, pas par ce fichier.
+{{/if}}
+{{#if mcp.has_codex}}
+- Codex : `.codex/config.toml`, charge uniquement pour un projet approuve (trusted).
+{{/if}}
+
+## Regles
+- Ne pas ajouter de serveur sans besoin documente ici, verification de la source et accord de l'equipe.
+- Ne jamais remplacer une reference `${VARIABLE}` par la valeur d'un jeton ; ne jamais commiter de fichier `.env` contenant un jeton.
+- Conserver la lecture seule et les ensembles d'outils limites ; toute extension de permission passe par une revue.
+- Relire la version epinglee avant mise a jour et relancer la verification en ligne.

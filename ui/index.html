@@ -18,8 +18,8 @@
         <li><button type="button" data-goto="0">Projet <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="1">Technologies <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="2">Agents <span class="badge" hidden></span></button></li>
-        <li><button type="button" data-goto="3">Securite et options <span class="badge" hidden></span></button></li>
-        <li><button type="button" data-goto="4">Skills externes <span class="badge" hidden></span></button></li>
+        <li><button type="button" data-goto="3">Securite <span class="badge" hidden></span></button></li>
+        <li><button type="button" data-goto="4">Skills et MCP <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="5">Verification et apercu <span class="badge" hidden></span></button></li>
       </ol>
     </nav>
@@ -87,16 +87,13 @@
       </section>
 
       <section class="step" aria-labelledby="h-security" hidden>
-        <h2 id="h-security">4. Securite et options</h2>
+        <h2 id="h-security">4. Securite</h2>
         <fieldset id="security"><legend>Niveau de securite</legend></fieldset>
-        <fieldset>
-          <legend>Options</legend>
-          <label class="check"><input type="checkbox" id="opt-mcp" name="mcp"> Documenter des serveurs MCP (aucun n'est installe)</label>
-        </fieldset>
       </section>
 
       <section class="step" aria-labelledby="h-skills" hidden>
-        <h2 id="h-skills">5. Skills externes</h2>
+        <h2 id="h-skills">5. Skills et MCP</h2>
+        <h3>Skills externes</h3>
         <p class="help">Recherche explicite sur GitHub : catalogues reconnus, et recherche de code si la CLI gh est connectee. Aucun skill n'est copie sans votre approbation ; scripts, binaires et executables ne sont jamais copies ni executes.</p>
         <button type="button" id="skills-search">Rechercher des skills pour cette configuration (reseau)</button>
         <ul id="skills-notes" class="hints" aria-live="polite"></ul>
@@ -106,13 +103,19 @@
         <ul id="skills-approved" class="skill-list" aria-labelledby="h-approved"></ul>
         <button type="button" id="skills-verify" disabled>Verifier les approbations (reseau)</button>
         <p class="help">Les approbations (depot, commit et empreinte du contenu) sont conservees dans le brouillon, les profils et l'export JSON. Un skill modifie depuis son approbation est refuse a la generation.</p>
+        <fieldset id="mcp">
+          <legend>Serveurs MCP (facultatif)</legend>
+          <p class="help">Seuls les serveurs pertinents pour cette configuration sont proposes. Aucun n'est configure sans selection ; aucun secret n'est ecrit (jetons lus dans des variables d'environnement). Provenance verifiee dans le registre MCP officiel lors de la verification en ligne.</p>
+          <div id="mcp-list"></div>
+          <p id="mcp-empty" class="help" hidden>Aucun serveur MCP pertinent pour ce type de projet.</p>
+        </fieldset>
       </section>
 
       <section class="step" aria-labelledby="h-verify" hidden>
         <h2 id="h-verify">6. Verification et apercu</h2>
         <fieldset>
           <legend>Controles en ligne (optionnels, explicites)</legend>
-          <label class="check"><input type="checkbox" id="net-verify"> Verifier packages, versions et vulnerabilites (PyPI, npm, OSV, endoflife.date)</label>
+          <label class="check"><input type="checkbox" id="net-verify"> Verifier packages, versions, vulnerabilites et serveurs MCP (PyPI, npm, OSV, endoflife.date, registre MCP)</label>
           <label class="check"><input type="checkbox" id="net-skills"> Recuperer les skills (my-skills et skills externes approuves, GitHub)</label>
         </fieldset>
         <button type="button" id="check" class="primary">Verifier la configuration</button>

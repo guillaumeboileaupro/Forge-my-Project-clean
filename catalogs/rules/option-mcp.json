@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "id": "option-mcp",
-  "description": "Documentation des serveurs MCP, uniquement sur demande explicite.",
+  "description": "Documentation des serveurs MCP choisis explicitement (aucun fichier sans selection).",
   "priority": 40,
   "when": {"options": {"mcp": true}},
-  "files": [{"path": "docs/MCP.md", "template": "documentation/MCP.md.tmpl"}],
+  "files": [{"path": "docs/MCP.md", "template": "mcp/MCP.md.tmpl"}],
   "sections": {
-    "security": ["Aucun serveur MCP n'est active sans verification de sa source, permissions minimales et accord de l'utilisateur."]
+    "security": ["Serveurs MCP limites a la selection documentee dans docs/MCP.md : provenance verifiee, permissions minimales, jetons fournis par variables d'environnement et jamais commites."]
   }
 }

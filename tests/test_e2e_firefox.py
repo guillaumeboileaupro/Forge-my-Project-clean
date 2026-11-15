@@ -303,6 +303,44 @@ class FirefoxFormTests(unittest.TestCase):
         self.click("#check")
         self.wait("return !document.querySelector('#download').disabled")
 
+    def test_mcp_selection(self):
+        self.type_text("#name", "mcp-demo")
+        self.js("const s=document.querySelector('#project_type'); s.value='web'; s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.click('[data-goto="1"]')
+        for css in ("#tech-node", "#tech-typescript", "#tech-vitest"):
+            self.click(css)
+        self.click('[data-goto="2"]')
+        self.click('input[name="agent"][value="claude"]')
+        self.click('[data-goto="4"]')
+        self.assertTrue(self.visible('[data-mcp="playwright"]'))
+        self.assertFalse(self.checked("#mcp-github") or self.checked("#mcp-playwright"))  # rien par defaut
+        self.click("#mcp-playwright")
+        self.click("#mcp-github")
+        self.assertIn("GITHUB_PERSONAL_ACCESS_TOKEN", self.text('[data-mcp="github"]'))
+        self.screenshot("mcp")
+        # Un projet API ne propose plus Playwright : selection retiree.
+        self.click('[data-goto="0"]')
+        self.js("const s=document.querySelector('#project_type'); s.value='api'; s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.click('[data-goto="4"]')
+        self.assertFalse(self.visible('[data-mcp="playwright"]'))
+        self.assertFalse(self.checked("#mcp-playwright"))
+        self.click('[data-goto="0"]')
+        self.js("const s=document.querySelector('#project_type'); s.value='web'; s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.click('[data-goto="5"]')
+        self.click("#check")
+        self.wait("return !document.querySelector('#download').disabled")
+        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
+        self.assertIn(".mcp.json", files)
+        self.assertIn("docs/MCP.md", files)
+        self.assertNotIn(".codex/config.toml", files)
+        self.click('[data-goto="4"]')
+        self.click("#mcp-github")
+        self.click('[data-goto="5"]')
+        self.click("#check")
+        self.wait("return !document.querySelector('#download').disabled")
+        files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
+        self.assertFalse({".mcp.json", "docs/MCP.md"} & set(files))
+
 
 if __name__ == "__main__":
     unittest.main()
