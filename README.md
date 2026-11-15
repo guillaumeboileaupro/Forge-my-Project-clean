@@ -10,7 +10,7 @@ Python 3.11+ uniquement, sans dependances externes.
 python3 server.py
 ```
 
-Ouvrir http://127.0.0.1:8765 dans Firefox : formulaire par sections (projet, technologies, agents, securite, skills externes, verification), explorateur des fichiers generes, edition et validation des contenus, puis telechargement de l'archive ZIP. Les fichiers modifies sont signales et peuvent etre retablis avant validation. Cette etape reste un apercu en memoire : aucune ecriture dans un dossier local n'est realisee par T16. Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
+Ouvrir http://127.0.0.1:8765 dans Firefox : formulaire par sections (projet, technologies, agents, securite, skills et MCP, verification), explorateur des fichiers generes, edition et validation des contenus, puis telechargement de l'archive ZIP. Les fichiers modifies sont signales et peuvent etre retablis avant validation. Cette etape reste un apercu en memoire : aucune ecriture dans un dossier local n'est realisee par T16. Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
 
 Les reponses sont sauvegardees automatiquement dans le navigateur et restaurees a la reouverture. Des profils predefinis (Python API/CLI/bibliotheque/Django, TypeScript React/Express) et des profils personnels (stockes dans `~/.config/forge-my-project/profiles.json`) se chargent dans le questionnaire; les reponses s'exportent et s'importent en JSON valide par le serveur.
 
@@ -37,7 +37,7 @@ Voir docs/ENGINE.md.
 
 ## Portee de cette version
 
-Genere un AGENTS.md, des skills, de la documentation d'architecture, des regles de securite et un squelette de CI en fonction du langage, de l'agent et du deploiement. Les packages et integrations MCP sont des recommandations a valider et ne sont pas installes automatiquement. Ne garantit pas qu'un projet genere est exempt de vulnerabilites.
+Genere un AGENTS.md, des skills, de la documentation d'architecture, des regles de securite et un squelette de CI en fonction du langage, de l'agent et du deploiement. Les serveurs MCP ne sont configures que sur selection explicite (catalogue verifie, permissions minimales, aucun secret) et ne sont ni installes ni demarres par l'outil. Ne garantit pas qu'un projet genere est exempt de vulnerabilites.
 
 ## Regles
 

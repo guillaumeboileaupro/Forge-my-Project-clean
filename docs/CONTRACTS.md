@@ -10,7 +10,7 @@ Statut: contrats de transition etablis par T02. Ils preservent le prototype T01 
 
 ## Interface utilisateur -> serveur
 - `GET /` retourne le formulaire hybride `ui/index.html` (moteur `forge/`); `GET /legacy` retourne le formulaire historique `ui/legacy.html`. Seuls les assets connus sont servis: `/css/app.css`, `/js/app.js`, `/js/legacy.js`.
-- `GET /api/catalog` retourne categories, technologies, agents, types de projet, niveaux de securite et options (lecture seule).
+- `GET /api/catalog` retourne categories, technologies, agents, types de projet, niveaux de securite, options et serveurs MCP proposes (`mcp_servers` : besoin, pertinence, provenance, licence, execution, variable du jeton, permissions) (lecture seule).
 - `POST /api/plan` accepte `{"config": <schema moteur v1>, "verify": bool, "skills": bool}` (1 a 65 536 octets, `Host` et `Origin` loopback) et retourne diagnostics, rapports et contenu des fichiers.
 - `POST /api/files/validate` accepte en plus `"files": {<chemin>: <texte>}` (2 500 000 octets de requete maximum). Le serveur regenere le plan et exige exactement les memes chemins, des textes UTF-8 sans NUL, 256 Kio maximum par fichier et 2 Mio au total. Il retourne la liste des chemins modifies; aucune ecriture n'a lieu.
 - `POST /api/archive` accepte le meme champ `files` optionnel et repete generation, controles et validation des editions avant de retourner le ZIP. Diagnostic bloquant: 422; edition ou schema invalide: 400; erreur imprevue: 500 sans detail. Voir docs/ENGINE.md.
@@ -52,6 +52,7 @@ Statut: contrats de transition etablis par T02. Ils preservent le prototype T01 
 
 ## Ecriture de fichiers
 - T16 implemente uniquement la preparation en memoire: arbre, edition, indication des changements, restauration du contenu genere et validation par `forge.filesystem.preview.validate_preview`.
+- Interactions T10/T15/T16: les fichiers des skills approuves et des serveurs MCP selectionnes sont editables comme les autres, mais ne peuvent etre ni ajoutes ni retires depuis l'editeur; un skill modifie depuis son approbation bloque l'archive (422) meme avec des editions; toute modification de la configuration ou des approbations desactive le telechargement jusqu'a une nouvelle verification.
 - Le telechargement ZIP reste la seule sortie. L'ensemble des chemins doit etre strictement identique au rendu regenere cote serveur; un ajout, une suppression ou un chemin non sur est refuse.
 - T17 ajoutera comparaison avec une destination, diff, fusion, confirmation, sauvegarde et rollback. Cette ecriture devra rester independante du transport HTTP et du moteur de templates.
 

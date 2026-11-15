@@ -179,7 +179,8 @@ function collectAnswers() {
     versions,
     agents: [...document.querySelectorAll('input[name="agent"]:checked')].map(input => input.value),
     security: document.querySelector('input[name="security"]:checked').value,
-    options: {mcp: $('#opt-mcp').checked},
+    options: {mcp: selectedMcp().length > 0},
+    mcp_servers: selectedMcp(),
     external_skills: state.approvals.map(approval => Object.assign({}, approval)),
   };
 }
@@ -424,7 +425,9 @@ function applyAnswers(answers) {
   }
   document.querySelectorAll('input[name="agent"]').forEach(input => { input.checked = answers.agents.includes(input.value); });
   document.querySelectorAll('input[name="security"]').forEach(input => { input.checked = input.value === answers.security; });
-  $('#opt-mcp').checked = Boolean(answers.options.mcp);
+  const servers = new Set(answers.mcp_servers || []);
+  document.querySelectorAll('input[name="mcp"]').forEach(input => { input.checked = servers.has(input.value); });
+  updateMcp();
   setApprovals(answers.external_skills || []);
   invalidateFiles();
   updateBadges();
@@ -439,6 +442,45 @@ async function validateDocument(documentValue) {
   const payload = await response.json();
   if (!response.ok || !payload.ok) throw new Error(payload.error || 'reponses invalides');
   return payload;
+}
+
+// --- Serveurs MCP optionnels (T15) -------------------------------------------
+// Pertinence calculee ici pour l'affichage ; le serveur la revalide.
+function selectedMcp() {
+  return [...document.querySelectorAll('input[name="mcp"]:checked')]
+    .filter(input => !input.closest('[data-mcp]').hidden).map(input => input.value);
+}
+
+function renderMcp() {
+  const list = $('#mcp-list');
+  list.replaceChildren();
+  for (const server of state.catalog.mcp_servers) {
+    const item = element('div', {class: 'skill', 'data-mcp': server.id, 'data-types': server.project_types.join(' ')});
+    const label = element('label', {class: 'check', for: `mcp-${server.id}`});
+    label.append(element('input', {type: 'checkbox', id: `mcp-${server.id}`, name: 'mcp', value: server.id}),
+      document.createTextNode(` ${server.name}`));
+    const facts = element('dl');
+    detail(facts, 'Besoin', server.need);
+    detail(facts, 'Pertinence', server.reason);
+    detail(facts, 'Provenance', `registre MCP ${server.registry_name}, ${server.repository} (${server.license})`);
+    detail(facts, 'Execution', server.transport);
+    if (server.token_env) detail(facts, 'Jeton', `variable d'environnement ${server.token_env} (jamais ecrite)`);
+    detail(facts, 'Permissions', server.permissions.join(' '));
+    item.append(label, facts);
+    list.append(item);
+  }
+}
+
+function updateMcp() {
+  const type = $('#project_type').value;
+  let visible = 0;
+  document.querySelectorAll('[data-mcp]').forEach(item => {
+    const types = item.dataset.types ? item.dataset.types.split(' ') : [];
+    item.hidden = types.length > 0 && !types.includes(type);
+    if (item.hidden) item.querySelector('input').checked = false;
+    else visible += 1;
+  });
+  $('#mcp-empty').hidden = visible > 0;
 }
 
 // --- Skills externes (T10) ---------------------------------------------------
@@ -458,7 +500,7 @@ function setApprovals(approvals, status = 'non verifiee depuis le chargement') {
 function approvalsChanged() {
   renderApprovals();
   renderCandidates();
-  if (state.lastConfig !== null && state.lastConfig !== requestBody()) $('#download').disabled = true;
+  if (state.lastConfig !== null && state.lastConfig !== requestBody()) invalidateFiles();
   scheduleSave();
 }
 
@@ -639,6 +681,7 @@ function resetForm() {
   state.ready = false;
   $('#forge').reset();
   updateConditional();
+  updateMcp();
   updateBadges();
   $('#download').disabled = true;
   $('#preview').hidden = true;
@@ -785,10 +828,11 @@ async function init() {
     return;
   }
   renderCatalog();
+  renderMcp();
   document.querySelectorAll('.step h2').forEach(h => h.setAttribute('tabindex', '-1'));
   const form = $('#forge');
   form.addEventListener('change', () => {
-    updateConditional(); updateBadges(); scheduleSave();
+    updateConditional(); updateMcp(); updateBadges(); scheduleSave();
     if (state.lastConfig !== null && state.lastConfig !== requestBody()) invalidateFiles();
   });
   form.addEventListener('input', () => {
@@ -827,6 +871,7 @@ async function init() {
   $('#skills-verify').addEventListener('click', verifySkills);
   renderApprovals();
   updateConditional();
+  updateMcp();
   updateBadges();
   await Promise.all([restoreDraft(), refreshProfiles()]);
   state.ready = true;

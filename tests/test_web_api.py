@@ -85,6 +85,22 @@ class ApiServerTests(unittest.TestCase):
         status, _, _ = self.request("POST", "/api/plan", "{", JSON_HEADERS)
         self.assertEqual(status, 400)
 
+    def test_mcp_servers_are_opt_in_and_revalidated(self):
+        _, _, body = self.request("GET", "/api/catalog")
+        servers = {s["id"]: s for s in json.loads(body)["mcp_servers"]}
+        self.assertEqual(servers["playwright"]["project_types"], ["web"])
+        self.assertEqual(servers["github"]["token_env"], "GITHUB_PERSONAL_ACCESS_TOKEN")
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        self.assertFalse({".mcp.json", ".codex/config.toml", "docs/MCP.md"} & set(json.loads(body)["files"]))
+        status, _, body = self.post("/api/plan", {"config": dict(CONFIG, mcp_servers=["github"])})
+        data = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertTrue({".mcp.json", ".codex/config.toml", "docs/MCP.md"} <= set(data["files"]))
+        self.assertIn("mcp-unverified", [x["code"] for x in data["diagnostics"]])
+        status, _, body = self.post("/api/plan", {"config": dict(CONFIG, mcp_servers=["playwright"])})
+        self.assertEqual(status, 422)
+        self.assertIn("mcp-not-relevant", [x["code"] for x in json.loads(body)["diagnostics"]])
+
     def test_transport_guards(self):
         cases = [
             ({"Host": "attacker.example"}, 403),
@@ -149,6 +165,36 @@ class ApiServerTests(unittest.TestCase):
         status, _, body = self.post("/api/archive", {"config": CONFIG, "files": files})
         self.assertEqual(status, 400)
         self.assertFalse(json.loads(body)["ok"])
+
+    def test_preview_routes_never_write_to_disk(self):
+        """Apercu, validation et archive restent en memoire : toute ouverture en ecriture echoue."""
+        import builtins
+        import os as os_module
+        real_open, real_os_open = builtins.open, os_module.open
+        writes = []
+
+        def guarded_open(file, mode="r", *args, **kwargs):
+            if any(flag in mode for flag in "wax+"):
+                writes.append(file)
+                raise AssertionError("ecriture interdite: %s" % file)
+            return real_open(file, mode, *args, **kwargs)
+
+        def guarded_os_open(path, flags, *args, **kwargs):
+            if flags & (os_module.O_WRONLY | os_module.O_RDWR | os_module.O_CREAT):
+                writes.append(path)
+                raise AssertionError("ecriture interdite: %s" % path)
+            return real_os_open(path, flags, *args, **kwargs)
+
+        config = dict(CONFIG, mcp_servers=["github"])
+        with mock.patch("builtins.open", guarded_open), mock.patch("os.open", guarded_os_open):
+            status, body = web.plan_payload(json.dumps({"config": config}))[:2]
+            files = json.loads(body)["contents"]
+            files["AGENTS.md"] += "\nEdition.\n"
+            request = json.dumps({"config": config, "files": files})
+            validated = web.preview_validate_payload(request)
+            archived = web.archive_payload(request)
+        self.assertEqual((status, validated[0], archived[0]), (200, 200, 200))
+        self.assertEqual(writes, [])
 
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))

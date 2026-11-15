@@ -31,8 +31,8 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | T12 | P5 | GitHub Actions generees et verifiees | T07,T11 | 2 j | 0 h 16 | -15 h 44 (base 8 h/j) | DONE | Pipelines reels pour stacks supportees |
 | T13 | P5 | Controles securite stricts et rapports | T11,T12 | 2 j | 0 h 12 | -15 h 48 (base 8 h/j) | DONE | Scans applicables et blocage fiable |
 | T14 | P5 | Hooks Git et agents suivant leurs capacites | T07 | 1 j | 0 h 11 | -7 h 49 (base 8 h/j) | DONE | Hooks activables et executes |
-| T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | - | - | TODO | Aucun MCP fictif ni secret |
-| T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | 0 h 06 | -15 h 54 (base 8 h/j) | DONE | Modifications visibles avant ecriture |
+| T15 | P5 | MCP optionnels verifies et valides | T10 | 1 j | 0 h 12 | -7 h 48 (base 8 h/j) | DONE | Aucun MCP fictif ni secret |
+| T16 | P6 | Explorateur, apercu et edition des fichiers | T08 | 2 j | 0 h 15 | -15 h 45 (base 8 h/j) | DONE | Modifications visibles avant ecriture |
 | T17 | P6 | Diff, fusion assistee, sauvegarde, ecriture locale | T16 | 2 j | - | - | TODO | Conflits et rollback testes |
 | T18 | P7 | Tests finaux, corrections, docs et rapport | T01-T17 | 3 j | - | - | TODO | Critères de finalisation valides |
 | **Total** | | | | **30 j** | **-** | **-** | | |
@@ -117,6 +117,15 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Defaut corrige: la barre laterale fixe depassait la hauteur de fenetre (bouton Reinitialiser inaccessible); elle defile desormais.
 - Limites: refus conserves uniquement pendant la session; l'empreinte repose sur les SHA-1 de blobs Git fournis par GitHub; la recherche de code GitHub exige la CLI gh authentifiee; la decision de confiance reste humaine.
 
+### T15 - 15 novembre 2026 (Claude Code)
+- Temps reel: 11 h 35 -> 11 h 47 (0 h 12), recherche documentaire pendant la CI de T10 puis branche dediee apres fusion de T10; CI et fusion notees dans la PR.
+- Catalogue `catalogs/mcp/servers.json` verifie a la source: registre MCP officiel (`io.github.github/github-mcp-server` 2.1.0, `io.github.microsoft/playwright-mcp` 0.0.85, statut actif), depots GitHub actifs, licences MIT et Apache-2.0, npm `@playwright/mcp` 0.0.85.
+- Formats d'agents verifies dans la documentation officielle: `.mcp.json` (Claude Code; destination native de Copilot dans VS Code, `${VAR}` dans les en-tetes), `.codex/config.toml` (`bearer_token_env_var`, `http_headers`, projets approuves uniquement).
+- Section « Skills et MCP » du formulaire: serveurs pertinents seulement, aucun coche par defaut, provenance, permissions et variable du jeton affichees; selection retiree si le type de projet la rend non pertinente.
+- Tests: `tests/test_engine_mcp.py` (11: catalogue strict, aucune sortie sans selection, fichiers par agent, JSON/TOML relus, absence de secret, pertinence, registre PASS/FAIL/NON VERIFIE, provenance fausse bloquante), API `test_mcp_servers_are_opt_in_and_revalidated`, recette Firefox `test_mcp_selection`. 194 tests unitaires OK (8 ignores: 7 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil), recette Firefox 7/7.
+- Verification reelle: registre MCP, npm et OSV PASS pour les deux serveurs; Gitleaks 8.30.1 (empreinte verifiee) sur un projet genere avec MCP: aucune fuite; Bandit: aucune alerte.
+- Limites: deux serveurs au catalogue; l'agent cloud Copilot se configure dans les parametres du depot; le serveur GitHub distant exige un jeton fourni par l'utilisateur; Playwright MCP n'est pas une frontiere de securite (documentation officielle); la phrase Codex sur le chargement reserve aux projets approuves provient de la page MCP (« trusted projects only »).
+
 ### T16 - 15 novembre 2026 (Codex)
 - Temps reel mesure: 0 h 06, de la creation du worktree a la premiere recette Firefox complete verte.
 - Interface: explorateur hierarchique, navigation precedent/suivant, apercu editable, marqueur par fichier, compteur global et restauration du contenu genere.
@@ -124,4 +133,14 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Securite: ajout/suppression/traversee de chemin, texte non UTF-8 ou avec NUL, fichier > 256 Kio et ensemble > 2 Mio refuses; aucune ecriture locale dans T16.
 - Tests locaux: 187 PASS, 7 ignores dans la suite standard; compilation Python et `node --check` PASS; recette Firefox headless 6/6 PASS.
 - T17 reste a faire: destination, diff, fusion, sauvegarde, confirmation, ecriture et rollback.
+
+### T16 - reprise et integration - 15 novembre 2026 (Claude Code, PR #15)
+- Codex indisponible: reprise de la branche `codex/file-preview` depuis un worktree independant (worktree personnel de Codex non modifie), fusion de `origin/main` (T10, T15) sans reecriture d'historique ni push force.
+- Temps reel de la reprise: 13 h 06 -> 13 h 15 (0 h 09), en plus des 0 h 06 de Codex; total T16 0 h 15.
+- Conflits resolus en conservant les deux apports: `forge/web.py` (validation de l'apercu + `_mcp_payload`), `ui/js/app.js` (invalidation de l'apercu + `updateMcp`), `docs/CONTRACTS.md`, `AGENTS.md`, `README.md`, `TODO.md`.
+- Correction d'interaction: approuver ou retirer un skill invalide desormais l'apercu valide (`approvalsChanged` appelait seulement `disabled`, la validation restait acquise); recette MCP adaptee au parcours valider-puis-telecharger.
+- Tests ajoutes: API `tests/test_skills_api.py` (skill approuve et MCP edites presents dans le ZIP, scripts jamais copies; editions refusees si MCP, approbations ou agents changent; skill modifie bloquant meme avec editions; injection de `.mcp.json`, `.codex/config.toml` ou d'un skill non approuve refusee), `test_preview_routes_never_write_to_disk` (apercu, validation et archive sans aucune ouverture en ecriture), Firefox `test_editor_and_skill_approval_interact` et extension de `test_mcp_selection` (archive capturee dans la page, sans ecriture du telechargement par Firefox, contenant l'edition).
+- Resultats locaux: 205 tests OK (9 ignores: 8 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil); recette Firefox headless 8/8; compilation Python et `node --check` PASS; CI generee des six profils predefinis PASS 6/6 en local avec `--verify` (python-api-fastapi, python-cli, python-library, python-web-django, typescript-api-express, typescript-web-react; Gitleaks inclus).
+- Securite: Bandit 1.9.4 aucune alerte au seuil CI (3 LOW preexistantes, identiques a `main`); Gitleaks 8.30.1 sur l'historique de la branche et sur forge/ui/tests: aucune fuite; seules ecritures du code applicatif: magasin de profils (`forge/config/profiles.py`), aucune dans un projet cible.
+- Limites: le contenu edite n'est pas rescanne pour les secrets avant l'archive (la CI generee lance Gitleaks); une edition de `.mcp.json` ou d'un skill n'est pas revalidee semantiquement (seuls chemins, encodage et tailles); les editions sont perdues si la configuration change.
 
