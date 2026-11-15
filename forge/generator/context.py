@@ -7,6 +7,7 @@ import json
 
 from forge.config.spec import AGENTS
 from forge.generator.stack import stack_context
+from forge.mcp.render import mcp_context
 from forge.verification.report import active_companions
 
 UNDEFINED = "NON DEFINI"
@@ -132,4 +133,5 @@ def build_context(plan, verification=None):
         "rules": list(plan.composition.rules),
         "warnings": [diag.message for diag in plan.diagnostics if diag.severity.value == "warning"],
         "status": {"undefined": UNDEFINED, "unverified": UNVERIFIED},
+        "mcp": mcp_context(plan, verification),
     }

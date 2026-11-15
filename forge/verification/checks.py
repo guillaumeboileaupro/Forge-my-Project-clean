@@ -195,3 +195,43 @@ def check_release_asset(repository, version, asset, sha256, fetch=fetch_json):
         return Check("tool", subject, Status.FAIL, "Empreinte differente de la valeur epinglee", url, {"actual": digest})
     return Check("tool", subject, Status.PASS, "Archive et empreinte SHA-256 concordantes", url, {"sha256": sha256})
 
+
+
+MCP_REGISTRY = "https://registry.modelcontextprotocol.io/v0/servers/%s/versions/latest"
+
+
+def check_mcp_server(server, fetch=fetch_json):
+    """Existence et provenance d'un serveur MCP dans le registre officiel.
+
+    PASS si l'entree est active, publiee depuis le depot attendu et declare le
+    transport configure (package npm ou URL distante) ; FAIL sinon.
+    """
+    url = MCP_REGISTRY % quote(server.registry_name, safe="")
+    try:
+        response = fetch(url)
+    except FetchError as exc:
+        return Check("mcp", server.registry_name, Status.NON_VERIFIE, "Registre MCP indisponible : %s" % exc, url)
+    entry = (response.data or {}).get("server") if isinstance(response.data, dict) else None
+    if response.status == 404 or not isinstance(entry, dict):
+        return Check("mcp", server.registry_name, Status.FAIL, "Serveur absent du registre MCP officiel", url)
+    meta = ((response.data.get("_meta") or {}).get("io.modelcontextprotocol.registry/official") or {})
+    problems = []
+    if entry.get("name") != server.registry_name:
+        problems.append("nom different")
+    if meta.get("status") != "active":
+        problems.append("statut %s" % meta.get("status", "inconnu"))
+    if (entry.get("repository") or {}).get("url", "").rstrip("/") != server.repository:
+        problems.append("depot different de %s" % server.repository)
+    if server.package:
+        identifiers = {p.get("identifier") for p in entry.get("packages") or [] if p.get("registryType") == "npm"}
+        if server.package["name"] not in identifiers:
+            problems.append("package %s non declare" % server.package["name"])
+    else:
+        remotes = {r.get("url") for r in entry.get("remotes") or []}
+        if server.transport["url"] not in remotes:
+            problems.append("URL distante non declaree")
+    if problems:
+        return Check("mcp", server.registry_name, Status.FAIL, "Provenance non conforme : " + ", ".join(problems), url)
+    return Check("mcp", server.registry_name, Status.PASS,
+                 "Registre MCP officiel : actif, depot et transport concordants (derniere version %s)" % entry.get("version"),
+                 url, {"latest": str(entry.get("version", ""))})

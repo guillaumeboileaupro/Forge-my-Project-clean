@@ -16,6 +16,7 @@ from forge.config.spec import AGENTS, OPTIONS, PROJECT_TYPES, SECURITY_LEVELS, S
 from forge.diagnostics import ForgeError
 from forge.generator.archive import build_zip
 from forge.generator.context import AGENT_INFO, PROJECT_TYPE_LABELS
+from forge.mcp.catalog import load_mcp_catalog
 from forge.pipeline import run
 from forge.planner.plan import build_plan
 from forge.skills import service as skill_service
@@ -46,7 +47,19 @@ def catalog_payload():
         "project_types": [{"id": p, "label": PROJECT_TYPE_LABELS[p]} for p in PROJECT_TYPES],
         "security_levels": list(SECURITY_LEVELS),
         "options": sorted(OPTIONS),
+        "mcp_servers": [_mcp_payload(server) for server in load_mcp_catalog().values()],
     })
+
+
+def _mcp_payload(server):
+    transport = server.transport
+    return {
+        "id": server.id, "name": server.name, "need": server.need, "reason": server.reason,
+        "project_types": list(server.project_types), "registry_name": server.registry_name,
+        "repository": server.repository, "license": server.license, "docs": server.docs,
+        "permissions": list(server.permissions), "token_env": server.token_env, "runtime": server.runtime,
+        "transport": transport["url"] if transport["type"] == "http" else " ".join([transport["command"], *transport["args"]]),
+    }
 
 
 def _parse_request(raw):

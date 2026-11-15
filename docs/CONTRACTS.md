@@ -10,7 +10,7 @@ Statut: contrats de transition etablis par T02. Ils preservent le prototype T01 
 
 ## Interface utilisateur -> serveur
 - `GET /` retourne le formulaire hybride `ui/index.html` (moteur `forge/`); `GET /legacy` retourne le formulaire historique `ui/legacy.html`. Seuls les assets connus sont servis: `/css/app.css`, `/js/app.js`, `/js/legacy.js`.
-- `GET /api/catalog` retourne categories, technologies, agents, types de projet, niveaux de securite et options (lecture seule).
+- `GET /api/catalog` retourne categories, technologies, agents, types de projet, niveaux de securite, options et serveurs MCP proposes (`mcp_servers` : besoin, pertinence, provenance, licence, execution, variable du jeton, permissions) (lecture seule).
 - `POST /api/plan` et `POST /api/archive` acceptent `{"config": <schema moteur v1>, "verify": bool, "skills": bool}` (1 a 65 536 octets, `Host` et `Origin` loopback). `plan` retourne diagnostics, rapports et contenu des fichiers; `archive` repete tous les controles puis retourne le ZIP, ou 422 avec les diagnostics bloquants. Erreur de schema: 400; erreur imprevue: 500 sans detail. Voir docs/ENGINE.md.
 - `POST /api/answers/validate` accepte `{"document": <export JSON ou reponses>}` et retourne les reponses normalisees ou 400 avec un message lisible. Reponses partielles admises (brouillon), mais tout champ inconnu, type invalide, technologie hors catalogue, prerequis manquant, conflit ou version non supportee est refuse.
 - `GET /api/profiles` (profils predefinis + personnels, `Host` loopback), `POST /api/profiles`, `PUT /api/profiles/<id>`, `DELETE /api/profiles/<id>` : corps `{"label", "description", "answers"}`; 404 si absent, 400 si invalide ou predefini.

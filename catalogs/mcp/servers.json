@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "registry": "https://registry.modelcontextprotocol.io",
+  "verified_on": "2026-11-15",
+  "servers": [
+    {
+      "id": "github",
+      "name": "GitHub MCP Server",
+      "need": "Consulter depot, issues, pull requests et runs GitHub Actions du projet depuis l'agent, en lecture seule.",
+      "relevance": {"reason": "Le workflow genere repose sur GitHub (PR, CI GitHub Actions)."},
+      "registry_name": "io.github.github/github-mcp-server",
+      "repository": "https://github.com/github/github-mcp-server",
+      "license": "MIT",
+      "docs": "https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md",
+      "transport": {
+        "type": "http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "headers": {"X-MCP-Readonly": "true", "X-MCP-Toolsets": "repos,issues,pull_requests,actions"},
+        "token_env": "GITHUB_PERSONAL_ACCESS_TOKEN"
+      },
+      "permissions": [
+        "Outils en lecture seule uniquement (en-tete X-MCP-Readonly).",
+        "Ensembles d'outils limites a repos, issues, pull_requests et actions (en-tete X-MCP-Toolsets).",
+        "Jeton GitHub a granularite fine limite au seul depot du projet, permissions en lecture : Contents, Issues, Pull requests, Actions, Metadata.",
+        "Le jeton est lu dans la variable d'environnement GITHUB_PERSONAL_ACCESS_TOKEN ; il n'est jamais ecrit dans le depot."
+      ]
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright MCP",
+      "need": "Piloter un navigateur pour verifier l'interface web en developpement local (parcours, captures).",
+      "relevance": {"project_types": ["web"], "reason": "Projet web : verification de l'interface dans un navigateur."},
+      "registry_name": "io.github.microsoft/playwright-mcp",
+      "repository": "https://github.com/microsoft/playwright-mcp",
+      "license": "Apache-2.0",
+      "docs": "https://github.com/microsoft/playwright-mcp",
+      "package": {"ecosystem": "npm", "name": "@playwright/mcp", "version": "0.0.85"},
+      "runtime": "node",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@0.0.85", "--isolated", "--headless"]
+      },
+      "permissions": [
+        "Version epinglee (@playwright/mcp@0.0.85) : aucune mise a jour implicite.",
+        "Profil navigateur en memoire, jamais ecrit sur disque (--isolated) ; navigateur sans interface (--headless).",
+        "Acces aux fichiers limite aux racines de l'espace de travail (comportement par defaut ; --allow-unrestricted-file-access n'est pas utilise).",
+        "N'est pas une frontiere de securite selon sa documentation : n'ouvrir que des URL de confiance (application locale)."
+      ]
+    }
+  ]
+}

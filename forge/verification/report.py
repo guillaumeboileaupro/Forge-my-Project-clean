@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from forge import diagnostics as d
 from forge.diagnostics import Status
+from forge.mcp.catalog import selected_servers
 from forge.verification import checks, npm_peers
 from forge.generator.stack import load_ci_catalog
 from forge.security.controls import load_security_tools
@@ -135,6 +136,10 @@ def verify_plan(plan, fetch=fetch_json, today=None):
             results.append(checks.check_runtime(tech.eol_product, plan.resolution.versions[tech.id], today, fetch))
     if compatibility is not None:
         results.append(compatibility)
+    for server in selected_servers(plan.spec):
+        results.append(checks.check_mcp_server(server, fetch))
+        if server.package:
+            results.extend(_verify_package("npm", server.package["name"], server.package["version"], fetch))
     if ".github/workflows/ci.yml" in plan.files:
         results.extend(_verify_actions(fetch))
         results.extend(_verify_security_tools(plan, fetch))

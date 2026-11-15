@@ -28,6 +28,9 @@ class Result:
         found = list(self.plan.diagnostics)
         if self.verification is not None:
             found += list(self.verification.diagnostics)
+        elif self.plan.spec.mcp_servers:
+            found.append(d.warning("mcp-unverified", "Serveurs MCP NON VERIFIES : lancer la verification en ligne "
+                                   "(registre MCP officiel, npm) avant d'utiliser la configuration"))
         if self.skills is not None:
             found += list(self.skills.diagnostics)
         elif self.plan.spec.external_skills:

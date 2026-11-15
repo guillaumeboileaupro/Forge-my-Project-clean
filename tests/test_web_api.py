@@ -85,6 +85,22 @@ class ApiServerTests(unittest.TestCase):
         status, _, _ = self.request("POST", "/api/plan", "{", JSON_HEADERS)
         self.assertEqual(status, 400)
 
+    def test_mcp_servers_are_opt_in_and_revalidated(self):
+        _, _, body = self.request("GET", "/api/catalog")
+        servers = {s["id"]: s for s in json.loads(body)["mcp_servers"]}
+        self.assertEqual(servers["playwright"]["project_types"], ["web"])
+        self.assertEqual(servers["github"]["token_env"], "GITHUB_PERSONAL_ACCESS_TOKEN")
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        self.assertFalse({".mcp.json", ".codex/config.toml", "docs/MCP.md"} & set(json.loads(body)["files"]))
+        status, _, body = self.post("/api/plan", {"config": dict(CONFIG, mcp_servers=["github"])})
+        data = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertTrue({".mcp.json", ".codex/config.toml", "docs/MCP.md"} <= set(data["files"]))
+        self.assertIn("mcp-unverified", [x["code"] for x in data["diagnostics"]])
+        status, _, body = self.post("/api/plan", {"config": dict(CONFIG, mcp_servers=["playwright"])})
+        self.assertEqual(status, 422)
+        self.assertIn("mcp-not-relevant", [x["code"] for x in json.loads(body)["diagnostics"]])
+
     def test_transport_guards(self):
         cases = [
             ({"Host": "attacker.example"}, 403),
