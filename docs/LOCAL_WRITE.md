@@ -40,7 +40,7 @@ Avant toute modification, chaque fichier remplace ou fusionne est copie dans `.f
   Relire la liste `created` avant de supprimer ces fichiers.
 
 ## Limites
-- Linux et macOS uniquement (descripteurs de dossier et `O_NOFOLLOW` requis) ; ailleurs l'ecriture est refusee, le ZIP reste disponible.
+- Linux (teste) et macOS (non teste, memes API POSIX dir_fd et `O_NOFOLLOW`) ; ailleurs, dont Windows, l'ecriture est refusee et le ZIP reste disponible.
 - La fusion est manuelle (pas de fusion a trois voies automatique). Un fichier existant binaire ou de plus de 256 Kio ne peut qu'etre conserve ou remplace.
 - Les configurations MCP et hooks d'agents existantes ne peuvent pas etre fusionnees avec les fichiers generes : conserver l'existant ou remplacer.
 - La detection de secrets repose sur des motifs connus ; elle ne remplace pas Gitleaks, execute par la CI et le hook pre-commit generes.

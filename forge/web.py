@@ -18,7 +18,7 @@ from forge.generator.archive import build_zip
 from forge.generator.context import AGENT_INFO, PROJECT_TYPE_LABELS
 from forge.filesystem import workflow
 from forge.filesystem.destination import browse
-from forge.filesystem.preview import validate_preview
+from forge.filesystem.preview import FileSetMismatch, validate_preview
 from forge.filesystem.writer import StaleError, WriteFailure
 from forge.mcp.catalog import load_mcp_catalog
 from forge.pipeline import run
@@ -86,6 +86,19 @@ def _execute(raw, extra=()):
     return run(body["config"], verify=body.get("verify", False), skills=body.get("skills", False)), body
 
 
+def _revalidate(edited, result, body):
+    """validate_preview, avec une explication si une source reseau a change le rendu depuis l'apercu."""
+    try:
+        return validate_preview(edited, result.files)
+    except FileSetMismatch as exc:
+        if not (body.get("skills") or body.get("verify")):
+            raise
+        notes = [x.message for x in result.diagnostics if x.code.startswith("skill") and x.severity is d.Severity.WARNING]
+        raise FileSetMismatch("Le rendu regenere differe de l'apercu verifie : une source en ligne a repondu differemment "
+                              "(%s). Relancer « Verifier la configuration » puis relire les fichiers. Detail : %s"
+                              % ("; ".join(notes[:3]) or "skills ou registres", exc)) from exc
+
+
 def _validated_files(raw, extra):
     """Plan sans erreur bloquante + editions revalidees (chemins, tailles, contenu)."""
     result, body = _execute(raw, ("files", *extra))
@@ -93,7 +106,7 @@ def _validated_files(raw, extra):
         raise ForgeError("Erreurs bloquantes", [x for x in result.diagnostics if x.severity is d.Severity.ERROR])
     if "files" not in body:
         raise ValueError("Le champ files est requis")
-    return result, body, validate_preview(body["files"], result.files)
+    return result, body, _revalidate(body["files"], result, body)
 
 
 def _failure(exc):
@@ -123,7 +136,7 @@ def archive_payload(raw):
         result, body = _execute(raw, ("files",))
         if d.has_errors(result.diagnostics):
             raise ForgeError("Erreurs bloquantes", [x for x in result.diagnostics if x.severity is d.Severity.ERROR])
-        files = result.files if body.get("files") is None else validate_preview(body["files"], result.files)
+        files = result.files if body.get("files") is None else _revalidate(body["files"], result, body)
         name = result.plan.spec.name
         content = build_zip(name, files)
     except (ForgeError, ValueError) as exc:
@@ -137,7 +150,7 @@ def preview_validate_payload(raw):
         result, body = _execute(raw, ("files",))
         if body.get("files") is None:
             raise ValueError("Le champ files est requis pour valider l'apercu")
-        files = validate_preview(body["files"], result.files)
+        files = _revalidate(body["files"], result, body)
     except (ForgeError, ValueError) as exc:
         return _failure(exc)
     changed = sorted(path for path, content in files.items() if content != result.files[path])

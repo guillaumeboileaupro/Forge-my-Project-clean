@@ -273,6 +273,20 @@ class ApiServerTests(unittest.TestCase):
         self.assertIn("POST /api/plan", log)
         self.assertNotIn(secret, log)
 
+    def test_changed_online_source_explains_the_file_set_mismatch(self):
+        """T18 : skills recuperes differemment entre l'apercu et la validation -> message actionnable."""
+        from types import SimpleNamespace
+        result = SimpleNamespace(files={"a.md": "x"},
+                                 diagnostics=[web.d.warning("skill-unverified", "Source my-skills inaccessible")])
+        edited = {"a.md": "x", ".agents/skills/demo/SKILL.md": "y"}
+        with self.assertRaises(ValueError) as raised:
+            web._revalidate(edited, result, {"skills": True})
+        self.assertIn("Relancer", str(raised.exception))
+        self.assertIn("my-skills inaccessible", str(raised.exception))
+        with self.assertRaises(ValueError) as raised:
+            web._revalidate(edited, result, {})
+        self.assertNotIn("Relancer", str(raised.exception))
+
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))
         with mock.patch("forge.pipeline.verify_plan", return_value=failing):

@@ -39,8 +39,8 @@ git config core.hooksPath .githooks
 Tester le formulaire sur http://127.0.0.1:8765 et les archives Python/JS avant de declarer un parcours valide.
 
 ## Pieges connus
-- Le mode affiche TypeScript mais produit actuellement un squelette JavaScript; ne pas le qualifier de TypeScript valide.
-- Les ZIP ne contiennent pas de lockfile, donc pas d'audit reproductible des dependances.
+- Formulaire historique (/legacy) uniquement : son mode TypeScript produit un squelette JavaScript ; le moteur (/) genere du TypeScript reel (tsconfig.json, sources .ts).
+- Les projets generes ne contiennent pas de lockfile : la CI generee installe puis audite (pip-audit, npm audit) a chaque execution, sans reproductibilite exacte des versions transitives.
 - Le hook pre-commit n'est actif qu'apres configuration du chemin Git.
 - Le workflow du formulaire historique est intentionnellement rouge; celui du moteur doit rester vert: toute modification de catalogs/ci, templates/stack ou des commandes du catalogue se valide avec `python3 tests/smoke_generated.py --verify`.
 - Security strict/hardened ne constitue pas une certification de securite.
