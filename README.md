@@ -4,13 +4,15 @@ Outil local qui prepare l'environnement de developpement d'un nouveau projet (AG
 
 ## Demarrage
 
-Python 3.11+ uniquement, sans dependances externes.
+Python 3.11+, sans dependances externes.
 
 ```bash
-python3 server.py
+python3 start.py              # ou : ./start.py
 ```
 
-Ouvrir http://127.0.0.1:8765 dans Firefox : formulaire par sections (projet, technologies avec recherche, agents, securite, skills et MCP, verification), suggestion d'architecture modifiable, confirmation explicite des avertissements, explorateur des fichiers generes, edition et validation des contenus, puis telechargement de l'archive ZIP ou ecriture dans un dossier local. Les fichiers modifies sont signales et peuvent etre retablis avant validation ; le contenu edite est controle (secrets, configurations MCP et hooks, skills). L'ecriture locale compare d'abord le dossier choisi (nouveau, identique, conflit avec diff), demande une decision pour chaque conflit (conserver, remplacer, fusionner) et une confirmation, sauvegarde les fichiers remplaces dans `.forge-backup/` et annule tout en cas d'echec : voir docs/LOCAL_WRITE.md (operations et restauration). Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
+`start.py` peut etre lance avec n'importe quel `python3`, meme trop ancien (Anaconda 3.7 par exemple) : il cherche alors un Python 3.11+ dans le PATH et `~/.local/bin` et se relance avec. Si Forge tourne deja sur le port 8765, il ouvre simplement le navigateur dessus ; sinon il prend le premier port libre a partir de 8765 et affiche l'adresse retenue. Options : `--port N` (premier port essaye), `--no-browser`, `--new` (nouveau serveur meme si Forge tourne deja). `python3.12 server.py` reste possible (port 8765 fixe).
+
+Ouvrir l'adresse affichee (par defaut http://127.0.0.1:8765) dans Firefox : formulaire par sections (projet, technologies avec recherche, agents, securite, skills et MCP, verification), suggestion d'architecture modifiable, confirmation explicite des avertissements, explorateur des fichiers generes, edition et validation des contenus, puis telechargement de l'archive ZIP ou ecriture dans un dossier local. Les fichiers modifies sont signales et peuvent etre retablis avant validation ; le contenu edite est controle (secrets, configurations MCP et hooks, skills). L'ecriture locale compare d'abord le dossier choisi (nouveau, identique, conflit avec diff), demande une decision pour chaque conflit (conserver, remplacer, fusionner) et une confirmation, sauvegarde les fichiers remplaces dans `.forge-backup/` et annule tout en cas d'echec : voir docs/LOCAL_WRITE.md (operations et restauration). Les controles en ligne (registres, my-skills) sont des cases a cocher explicites ; les skills externes sont recherches a la demande et copies uniquement apres approbation, au commit et a l'empreinte approuves. L'ancien formulaire reste disponible sur http://127.0.0.1:8765/legacy.
 
 Les reponses sont sauvegardees automatiquement dans le navigateur et restaurees a la reouverture. Des profils predefinis (Python API/CLI/bibliotheque/Django, TypeScript React/Express) et des profils personnels (stockes dans `~/.config/forge-my-project/profiles.json`) se chargent dans le questionnaire; les reponses s'exportent et s'importent en JSON valide par le serveur.
 
