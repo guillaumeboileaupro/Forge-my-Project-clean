@@ -12,14 +12,15 @@
   <aside class="sidebar">
     <h1>Forge-my-Project</h1>
     <p class="muted">Preparation locale de l'environnement d'un projet. Aucune IA, aucun code metier, aucune publication.</p>
-    <progress id="progress" max="5" value="1" aria-label="Progression du questionnaire"></progress>
+    <progress id="progress" max="6" value="1" aria-label="Progression du questionnaire"></progress>
     <nav aria-label="Sections du questionnaire">
       <ol id="steps">
         <li><button type="button" data-goto="0">Projet <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="1">Technologies <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="2">Agents <span class="badge" hidden></span></button></li>
         <li><button type="button" data-goto="3">Securite et options <span class="badge" hidden></span></button></li>
-        <li><button type="button" data-goto="4">Verification et apercu <span class="badge" hidden></span></button></li>
+        <li><button type="button" data-goto="4">Skills externes <span class="badge" hidden></span></button></li>
+        <li><button type="button" data-goto="5">Verification et apercu <span class="badge" hidden></span></button></li>
       </ol>
     </nav>
     <section class="tools" aria-labelledby="h-save">
@@ -94,12 +95,25 @@
         </fieldset>
       </section>
 
+      <section class="step" aria-labelledby="h-skills" hidden>
+        <h2 id="h-skills">5. Skills externes</h2>
+        <p class="help">Recherche explicite sur GitHub : catalogues reconnus, et recherche de code si la CLI gh est connectee. Aucun skill n'est copie sans votre approbation ; scripts, binaires et executables ne sont jamais copies ni executes.</p>
+        <button type="button" id="skills-search">Rechercher des skills pour cette configuration (reseau)</button>
+        <ul id="skills-notes" class="hints" aria-live="polite"></ul>
+        <ul id="skills-candidates" class="skill-list" aria-label="Skills candidats"></ul>
+        <h3 id="h-approved">Skills approuves</h3>
+        <p id="skills-empty" class="help">Aucun skill externe approuve.</p>
+        <ul id="skills-approved" class="skill-list" aria-labelledby="h-approved"></ul>
+        <button type="button" id="skills-verify" disabled>Verifier les approbations (reseau)</button>
+        <p class="help">Les approbations (depot, commit et empreinte du contenu) sont conservees dans le brouillon, les profils et l'export JSON. Un skill modifie depuis son approbation est refuse a la generation.</p>
+      </section>
+
       <section class="step" aria-labelledby="h-verify" hidden>
-        <h2 id="h-verify">5. Verification et apercu</h2>
+        <h2 id="h-verify">6. Verification et apercu</h2>
         <fieldset>
           <legend>Controles en ligne (optionnels, explicites)</legend>
           <label class="check"><input type="checkbox" id="net-verify"> Verifier packages, versions et vulnerabilites (PyPI, npm, OSV, endoflife.date)</label>
-          <label class="check"><input type="checkbox" id="net-skills"> Recuperer les skills du depot my-skills (GitHub)</label>
+          <label class="check"><input type="checkbox" id="net-skills"> Recuperer les skills (my-skills et skills externes approuves, GitHub)</label>
         </fieldset>
         <button type="button" id="check" class="primary">Verifier la configuration</button>
         <div id="report" aria-live="polite"></div>

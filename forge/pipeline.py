@@ -30,6 +30,9 @@ class Result:
             found += list(self.verification.diagnostics)
         if self.skills is not None:
             found += list(self.skills.diagnostics)
+        elif self.plan.spec.external_skills:
+            found.append(d.warning("skills-not-fetched", "%d skill(s) externe(s) approuve(s) non copie(s) : "
+                                   "activer la recuperation des skills (reseau)" % len(self.plan.spec.external_skills)))
         return found
 
     def as_dict(self):

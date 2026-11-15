@@ -3,7 +3,8 @@
 Chaque fonction retourne (statut HTTP, corps en octets, type de contenu, nom de
 telechargement ou None), dans l'ordre attendu par server.Handler.reply.
 Toute entree est revalidee ici : le navigateur n'est jamais une source de
-confiance. Le reseau n'est utilise que si `verify` ou `skills` est demande.
+confiance. Le reseau n'est utilise que si `verify` ou `skills` est demande,
+ou par la recherche / verification explicite des skills externes.
 """
 import json
 
@@ -11,11 +12,13 @@ from forge import diagnostics as d
 from forge.config.answers import envelope, parse_answers, unwrap
 from forge.config.catalog import load_catalog
 from forge.config.profiles import PROFILE_FIELDS, ProfileNotFound, ProfileStore, load_predefined
-from forge.config.spec import AGENTS, OPTIONS, PROJECT_TYPES, SECURITY_LEVELS, SpecError
+from forge.config.spec import AGENTS, OPTIONS, PROJECT_TYPES, SECURITY_LEVELS, SpecError, parse_approvals
 from forge.diagnostics import ForgeError
 from forge.generator.archive import build_zip
 from forge.generator.context import AGENT_INFO, PROJECT_TYPE_LABELS
 from forge.pipeline import run
+from forge.planner.plan import build_plan
+from forge.skills import service as skill_service
 
 JSON = "application/json; charset=utf-8"
 REQUEST_FIELDS = {"config", "verify", "skills"}
@@ -157,3 +160,27 @@ def profile_delete_payload(profile_id):
         store.delete(profile_id)
         return _json(200, {"ok": True})
     return _profile_call(action)
+
+
+# --- Skills externes (T10) : recherche et verification explicites ----------
+def skills_search_payload(raw):
+    """Candidats pour la configuration courante ; rien n'est copie ni execute."""
+    try:
+        plan = build_plan(_body(raw, {"config"})["config"])
+        if not plan.ok:
+            raise ForgeError("Configuration incomplete : recherche impossible",
+                             [x for x in plan.diagnostics if x.severity is d.Severity.ERROR])
+        found = skill_service.search_for_plan(plan)
+    except (ForgeError, ValueError) as exc:
+        return _failure(exc)
+    return _json(200, {"ok": True, "candidates": [c.as_dict() for c in found.candidates], "notes": found.notes})
+
+
+def skills_verify_payload(raw):
+    """Revalide des approbations (import, profil, brouillon) contre GitHub, sans copie."""
+    try:
+        approvals = parse_approvals(_body(raw, {"approvals"})["approvals"])
+        checks = skill_service.verify_approvals(approvals)
+    except ValueError as exc:
+        return _failure(exc)
+    return _json(200, {"ok": all(c["status"] == "PASS" for c in checks), "checks": checks})

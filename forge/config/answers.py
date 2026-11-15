@@ -72,7 +72,7 @@ def parse_answers(data, catalog):
             "agents": [a for a in s.AGENTS if a in agents],
             "security": s._choice(data, "security", s.SECURITY_LEVELS, "strict"),
             "options": s._options(data),
-            "external_skills": [dict(zip(("repository", "commit", "path", "name"), item))
+            "external_skills": [dict(zip(s.APPROVAL_FIELDS, item))
                                 for item in s._external_skills(data)],
         }
     except s.SpecError as exc:

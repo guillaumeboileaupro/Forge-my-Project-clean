@@ -18,6 +18,8 @@ import urllib.request
 from unittest import mock
 
 from server import Handler, ThreadingHTTPServer
+from tests.test_engine_external_skills import CONFIG as SKILL_CONFIG
+from tests.test_engine_external_skills import FakeClient, FakeGh, modified_repos
 
 ELEMENT = "element-6066-11e4-a52e-4f735466cecf"
 ENABLED = os.environ.get("FORGE_E2E") == "1" and shutil.which("geckodriver") and shutil.which("firefox")
@@ -36,6 +38,12 @@ class FirefoxFormTests(unittest.TestCase):
         cls.profiles_dir = tempfile.mkdtemp(prefix="forge-e2e-profiles-")
         cls.env = mock.patch.dict(os.environ, {"FORGE_PROFILES_FILE": os.path.join(cls.profiles_dir, "profiles.json")})
         cls.env.start()
+        # GitHub remplace par un faux client : aucun acces reseau pendant la recette.
+        cls.skill_client = FakeGh()
+        cls.skill_patches = [mock.patch("forge.skills.service.default_client", lambda: cls.skill_client),
+                             mock.patch("forge.skills.service.b.load_copy_policy", lambda: SKILL_CONFIG)]
+        for patch in cls.skill_patches:
+            patch.start()
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = "http://127.0.0.1:%d" % cls.server.server_address[1]
@@ -67,6 +75,8 @@ class FirefoxFormTests(unittest.TestCase):
             cls.server.shutdown()
             cls.server.server_close()
             cls.env.stop()
+            for patch in cls.skill_patches:
+                patch.stop()
             shutil.rmtree(cls.tmp, ignore_errors=True)
             shutil.rmtree(cls.profiles_dir, ignore_errors=True)
 
@@ -234,7 +244,7 @@ class FirefoxFormTests(unittest.TestCase):
         # Section 3 : agents, puis verification.
         self.click('[data-goto="2"]')
         self.click('input[name="agent"][value="claude"]')
-        self.click('[data-goto="4"]')
+        self.click('[data-goto="5"]')
         self.click("#check")
         self.wait("return !document.querySelector('#download').disabled")
         files = self.js("return [...document.querySelectorAll('#files button')].map(b => b.textContent)")
@@ -246,6 +256,52 @@ class FirefoxFormTests(unittest.TestCase):
         self.click('[data-goto="0"]')
         self.cmd("POST", "/element/%s/value" % self.find("#description"), {"text": "x"})
         self.assertTrue(self.js("return document.querySelector('#download').disabled"))
+
+    def text(self, css):
+        return self.js("return document.querySelector(arguments[0]).textContent", css)
+
+    def test_external_skills_approval(self):
+        type(self).skill_client = FakeGh()
+        draft = {"format": "forge-my-project/answers", "schema_version": 1, "answers": {
+            "name": "shop-web", "project_type": "web", "agents": ["claude"],
+            "technologies": ["node", "typescript", "react", "vitest"]}}
+        self.open_with_storage(json.dumps(draft))
+        self.click('[data-goto="4"]')
+        self.click("#skills-search")
+        self.wait("return document.querySelectorAll('#skills-candidates [data-skill]').length === 2")
+        card = self.text('[data-skill="webapp-testing"]')
+        for expected in ("Test React web apps", "anthropics/skills/skills", "a" * 40, "source reconnue", "run.py"):
+            self.assertIn(expected, card)
+        self.assertIn("source non reconnue", self.text('[data-skill="react-helper"]'))
+        self.click('[data-skill="webapp-testing"] [data-action="approve"]')
+        self.click('[data-skill="react-helper"] [data-action="refuse"]')
+        self.assertIn("Refuse", self.text('[data-skill="react-helper"] .decision'))
+        self.assertEqual(self.js("return document.querySelectorAll('#skills-approved [data-approved]').length"), 1)
+        self.screenshot("skills")
+        # Conservation : brouillon recharge, puis verification en ligne (faux GitHub).
+        self.wait("return (localStorage.getItem('forge-my-project.draft.v1') || '').includes('sha256:')")
+        self.cmd("POST", "/refresh", {})
+        self.wait("return document.querySelector('#autosave-status').textContent.includes('restaurees')")
+        self.assertIn("webapp-testing", self.text("#skills-approved"))
+        self.click('[data-goto="4"]')
+        self.click("#skills-verify")
+        self.wait("return document.querySelector('#skills-approved [data-status]').dataset.status === 'PASS'")
+        # Le skill change cote GitHub : verification en echec et generation bloquee.
+        type(self).skill_client = FakeClient(repos=modified_repos("skills/webapp-testing/SKILL.md", "change"))
+        self.click("#skills-verify")
+        self.wait("return document.querySelector('#skills-approved [data-status]').dataset.status === 'FAIL'")
+        self.click('[data-goto="5"]')
+        self.click("#net-skills")
+        self.click("#check")
+        self.wait("return document.querySelector('#report').textContent.includes('modifie depuis son approbation')")
+        self.assertTrue(self.js("return document.querySelector('#download').disabled"))
+        # Retrait de l'approbation : la generation redevient possible.
+        self.click('[data-goto="4"]')
+        self.click('#skills-approved button')
+        self.assertTrue(self.visible("#skills-empty"))
+        self.click('[data-goto="5"]')
+        self.click("#check")
+        self.wait("return !document.querySelector('#download').disabled")
 
 
 if __name__ == "__main__":

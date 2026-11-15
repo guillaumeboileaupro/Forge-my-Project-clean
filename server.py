@@ -23,6 +23,8 @@ API_POST = {
     "/api/archive": web.archive_payload,
     "/api/answers/validate": web.answers_validate_payload,
     "/api/profiles": web.profile_create_payload,
+    "/api/skills/search": web.skills_search_payload,
+    "/api/skills/verify": web.skills_verify_payload,
 }
 PROFILE_PATH = re.compile(r"^/api/profiles/([a-z0-9][a-z0-9-]{0,47})$")
 

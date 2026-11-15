@@ -10,7 +10,7 @@ small{color:#57657a}
 /* Formulaire hybride du moteur (page /) */
 body.forge{max-width:none;margin:0;padding:0}
 .forge .layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:24px;max-width:1180px;margin:0 auto;padding:24px 16px}
-.forge .sidebar{position:sticky;top:24px;align-self:start}
+.forge .sidebar{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow-y:auto}
 .forge .sidebar h1{font-size:1.35rem;margin:0 0 8px}
 .forge .muted,.forge .help{color:#57657a;font-size:.9rem;margin:4px 0}
 .forge progress{width:100%;margin:12px 0}
@@ -56,3 +56,13 @@ body.forge{max-width:none;margin:0;padding:0}
 .forge .file-label{font-size:.9rem;margin:10px 0 2px}
 .forge .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .forge #alert:empty{display:none}
+.forge .skill-list{list-style:none;padding:0;margin:8px 0}
+.forge .skill{border:1px solid #d6dde8;border-radius:8px;padding:10px 14px;margin:8px 0}
+.forge .skill.approved{border-color:#1d6b35;background:#f2faf4}
+.forge .skill.refused{opacity:.7}
+.forge .skill-title{margin:0 0 6px}
+.forge .skill dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px;margin:0 0 6px;font-size:.88rem}
+.forge .skill dt{font-weight:600;color:#57657a}
+.forge .skill dd{margin:0;overflow-wrap:anywhere}
+.forge .tag{font-size:.78rem;font-weight:700;border:1px solid currentColor;border-radius:10px;padding:0 8px}
+@media (max-width:760px){.forge .skill dl{grid-template-columns:1fr}}
