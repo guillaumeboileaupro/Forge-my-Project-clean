@@ -191,3 +191,23 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BranchProtectionDocTests(unittest.TestCase):
+    def test_contributing_gives_a_branch_protection_command_matching_ci_jobs(self):
+        import json as json_module
+        import re
+        from forge.pipeline import run
+        for config in ({"schema_version": 1, "name": "api-demo", "project_type": "api", "description": "",
+                        "technologies": ["python", "fastapi", "pytest"], "agents": ["claude"]},
+                       {"schema_version": 1, "name": "web-demo", "project_type": "web", "description": "",
+                        "technologies": ["typescript", "node", "react", "vitest"], "agents": ["codex"]}):
+            files = run(config).files
+            contributing = files["CONTRIBUTING.md"]
+            self.assertIn('gh api --method PUT "repos/{owner}/{repo}/branches/main/protection"', contributing)
+            body = json_module.loads(contributing.split("<<'JSON'\n")[1].split("\nJSON")[0])
+            jobs = re.findall(r"^    name: (.+)$", files[".github/workflows/ci.yml"], re.M)
+            self.assertEqual([c["context"] for c in body["required_status_checks"]["checks"]], jobs)
+            self.assertEqual((body["allow_force_pushes"], body["allow_deletions"], body["enforce_admins"]), (False, False, True))
+            self.assertIn("CONTRIBUTING.md", files["AGENTS.md"])
+

@@ -19,8 +19,8 @@ Le graphe est indicatif: la colonne Depend de fait foi.
 | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
 | T01 | P1 | Auditer le prototype et corriger ses defauts | - | 1 j | 0 h 05 | -7 h 55 (base 8 h/j) | DONE | Tests serveur/ZIP et JS reproductibles |
 | T02 | P1 | Reorganiser modules et modeles externes sans casser l'existant | T01 | 1 j | 0 h 06 | -7 h 54 (base 8 h/j) | DONE | Contrats clairs, tests verts |
-| T03 | P2 | Formulaire hybride, navigation et progression | T02 | 2 j | en cours | - | IN PROGRESS | Parcours UI valides |
-| T04 | P2 | Questions conditionnelles et validation | T03 | 1 j | en cours | - | IN PROGRESS | Questions coherentes selon reponses |
+| T03 | P2 | Formulaire hybride, navigation et progression | T02 | 2 j | 0 h 03 | -15 h 57 (base 8 h/j) | DONE | Parcours UI valides |
+| T04 | P2 | Questions conditionnelles et validation | T03 | 1 j | 0 h 02 | -7 h 58 (base 8 h/j) | DONE | Questions coherentes selon reponses |
 | T05 | P2 | Profils, autosauvegarde et import/export JSON | T03 | 1 j | 0 h 09 | -7 h 51 (base 8 h/j) | DONE | Reprise et import fiable |
 | T06 | P3 | Catalogue technologies et compatibilites | T02 | 2 j | 0 h 13 | -15 h 47 (base 8 h/j) | DONE | Configs incompatibles detectees |
 | T07 | P3 | Moteur de regles et composition des templates | T06 | 2 j | 0 h 02 | -15 h 58 (base 8 h/j) | DONE | Rendu deterministe et coherent |
@@ -155,4 +155,13 @@ Pour chaque tache terminee: commande et resultat des tests, lien du run CI, impa
 - Resultats locaux: 230 tests OK (10 ignores: 9 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil); recette Firefox headless 9/9; compilation Python et `node --check` PASS; Bandit 1.9.4 aucune alerte au seuil CI; Gitleaks 8.30.1 aucune fuite.
 - Documentation: docs/LOCAL_WRITE.md (parcours, garanties, sauvegarde, restauration manuelle), CONTRACTS, SECURITY, ARCHITECTURE, README, AGENTS.
 - Limites: Linux et macOS uniquement (ZIP ailleurs); fusion manuelle sans fusion a trois voies; fichier existant binaire ou > 256 Kio: conserver ou remplacer; configurations MCP/hooks existantes non fusionnables; detection de secrets par motifs (Gitleaks reste la reference); `.forge-backup/` a exclure du depot par l'utilisateur; jeton invalide apres redemarrage du serveur.
+
+### T03/T04 - cloture - 15 novembre 2026 (Claude Code)
+- Temps reel: 14 h 20 -> 14 h 25 (5 min pour la cloture commune, repartis T03 3 min / T04 2 min); le travail anterieur sur le formulaire (T01-T02, T05, T10, T15-T17) n'avait pas ete chronometre au titre de T03/T04 et n'est pas compte.
+- Matrice exigences -> implementation -> tests: docs/TRACEABILITY.md (45 exigences de SPECIFICATIONS.md; noms de tests verifies automatiquement).
+- Les « 40 choix confirmes » ne sont dans aucun fichier, commit, branche ni PR du depot (seule leur synthese SPECIFICATIONS.md existe): non retracables individuellement, non reconstitues.
+- Ecarts corriges: recherche des technologies (U5), suggestion d'architecture reprise et modifiable dans le formulaire (U3), confirmation explicite des avertissements avant validation (V4), journal final complet genere/ignore/non verifie/echec (V5), commande de protection de branche verifiee dans l'API REST GitHub et alignee sur les jobs CI (W2), preuve que le journal du serveur n'expose jamais le corps des requetes (U11).
+- Dependances, incompatibilites et cascades: retrait en cascade des prerequis (Firefox), conflits uni/bidirectionnels et prerequis manquants (test_engine_catalog), brouillon/profil incompatible refuse (test_profiles, Firefox), MCP non pertinent retire au changement de type (Firefox test_mcp_selection), editions perimees apres changement de selection (test_skills_api).
+- Tests: 234 tests unitaires OK (11 ignores: 10 parcours Firefox sans FORGE_E2E, branche gitleaks sans outil); recette Firefox 10/10 dont `test_questionnaire_search_suggestion_and_warning_confirmation`.
+- Restent PARTIEL (voir matrice): U9 fusion manuelle sans trois voies, S7 pas de harnais E2E genere, W2 protection de branche a executer par le proprietaire du depot.
 

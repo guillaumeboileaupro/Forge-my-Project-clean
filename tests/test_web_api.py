@@ -233,7 +233,10 @@ class ApiServerTests(unittest.TestCase):
             self.assertEqual(report["summary"]["replaced"], 1)
             self.assertTrue((dest / "AGENTS.md").read_text().endswith("Relu.\n"))
             self.assertEqual((dest / report["backup"] / "README.md").read_text(), "Mon README\n")
-            self.assertIn("journal", report)
+            journal = report["journal"]
+            self.assertEqual(set(journal), {"genere", "ignore", "non_verifie", "echec"})
+            self.assertIn("AGENTS.md", journal["genere"])
+            self.assertIn("README.md", journal["genere"])
             # Meme jeton une seconde fois : la destination a change, validation perimee.
             self.assertEqual(self.post("/api/write/apply", dict(apply, confirm=True))[0], 409)
 
@@ -249,6 +252,26 @@ class ApiServerTests(unittest.TestCase):
                 status, _, body = self.post(path, payload)
                 self.assertEqual(status, 400)
                 self.assertIn("jeton GitHub", json.loads(body)["error"])
+
+    def test_plan_exposes_editable_architecture_suggestion(self):
+        status, _, body = self.post("/api/plan", {"config": CONFIG})
+        data = json.loads(body)
+        self.assertEqual(data["architecture"]["source"], "suggested")
+        self.assertTrue(any("HTTP" in line for line in data["architecture"]["suggested"]))
+        manual = dict(CONFIG, architecture="- Module unique")
+        data = json.loads(self.post("/api/plan", {"config": manual})[2])
+        self.assertEqual(data["architecture"]["source"], "manual")
+        self.assertIn("- Module unique", data["contents"]["docs/ARCHITECTURE.md"])
+
+    def test_server_log_never_contains_request_bodies(self):
+        """Logs techniques locaux : ligne de requete et statut uniquement, jamais le corps (secrets)."""
+        secret = "ghp_" + "s" * 36
+        with mock.patch("sys.stderr", io.StringIO()) as stderr:
+            self.post("/api/plan", {"config": dict(CONFIG, description=secret)})
+            self.post("/api/plan", {"config": dict(CONFIG, name=secret)})
+        log = stderr.getvalue()
+        self.assertIn("POST /api/plan", log)
+        self.assertNotIn(secret, log)
 
     def test_archive_repeats_verification_and_blocks_errors(self):
         failing = VerificationReport((), (web.d.error("verification-package", "pypi:fastapi : inexistant"),))

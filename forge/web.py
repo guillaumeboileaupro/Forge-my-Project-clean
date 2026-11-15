@@ -110,6 +110,10 @@ def plan_payload(raw):
         return _failure(exc)
     payload = result.as_dict()
     payload["contents"] = result.files
+    if result.plan is not None:
+        # Suggestion des regles locales, reprise et modifiable dans le formulaire.
+        payload["architecture"] = {"source": result.plan.architecture["source"],
+                                   "suggested": list(result.plan.architecture["suggested"])}
     return _json(200, payload)
 
 
@@ -260,6 +264,19 @@ def write_compare_payload(raw):
     return _json(200, dict(comparison, ok=True, diagnostics=[x.as_dict() for x in result.diagnostics]))
 
 
+def _journal(report, result):
+    """Journal final exige par la specification : genere, ignore, non verifie, echec."""
+    operations = report["operations"]
+    checks = result.verification.as_dict()["checks"] if result.verification is not None else []
+    return {
+        "genere": [op["path"] for op in operations if op["action"] in ("created", "replaced", "merged")],
+        "ignore": [op["path"] for op in operations if op["action"] in ("kept", "identical")],
+        "non_verifie": [x.message for x in result.diagnostics if x.severity is d.Severity.WARNING]
+                       + ["%s %s : %s" % (c["kind"], c["subject"], c["message"]) for c in checks if c["status"] == "NON VERIFIE"],
+        "echec": [],  # un echec bloque l'ecriture (409, 422 ou 500 avec restauration)
+    }
+
+
 def write_apply_payload(raw):
     """Repete generation, controles, validation et comparaison, puis ecrit apres confirmation."""
     try:
@@ -275,9 +292,6 @@ def write_apply_payload(raw):
         return _failure(exc)
     except OSError as exc:
         return _failure(ValueError("Destination inaccessible : %s" % exc.strerror))
-    report["journal"] = {
-        "non_verifie": [x.message for x in result.diagnostics if x.severity is d.Severity.WARNING],
-        "echec": [],
-    }
+    report["journal"] = _journal(report, result)
     return _json(200, {"ok": True, "report": report, "diagnostics": [x.as_dict() for x in result.diagnostics]})
 
